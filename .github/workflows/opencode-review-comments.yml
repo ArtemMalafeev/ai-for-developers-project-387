@@ -6,7 +6,7 @@ on:
   pull_request_review_comment:
     types: [created]
 
-run-name: OpenCode request gate PR #${{ github.event.issue.number || github.event.pull_request.number }} attempt ${{ github.run_attempt }}
+run-name: "OpenCode request gate PR #${{ github.event.issue.number || github.event.pull_request.number }} attempt ${{ github.run_attempt }}"
 
 concurrency:
   group: opencode-review-request-${{ github.event.issue.number || github.event.pull_request.number }}

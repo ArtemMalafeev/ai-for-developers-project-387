@@ -129,6 +129,30 @@ if [ "$RUN_ID" != "local" ] && [ "$RUN_ATTEMPT" -gt 1 ]; then
   done
 fi
 
+# The first admitted request for PR #43 ran before run-name was quoted in YAML.
+# Its title has no PR number, so the normal title filter cannot find it. Count
+# its immutable Actions run while this PR is open; fail closed if history is lost.
+legacy_run_id=44954978888
+if [ "$PR_NUMBER" = "43" ] && [ "$RUN_ID" != "$legacy_run_id" ]; then
+  legacy_attempts="$(printf '%s' "$runs_json" | jq -r --argjson id "$legacy_run_id" \
+    '[.[] | select(.id == $id)][0].run_attempt // empty')"
+  case "$legacy_attempts" in
+    ''|*[!0-9]*) runs_error "старый запуск $legacy_run_id отсутствует в истории" ;;
+  esac
+  for ((attempt = 1; attempt <= legacy_attempts; attempt++)); do
+    rc=0
+    gate_admitted "$legacy_run_id" "$attempt" || rc=$?
+    case "$rc" in
+      0) count=$((count + 1)) ;;
+      1) [ "$attempt" -ne 1 ] || runs_error "не удалось подтвердить первый допущенный запрос" ;;
+      *) runs_error "задание gate для старого запуска $legacy_run_id попытки $attempt" ;;
+    esac
+    if [ "$count" -ge "$MAX_REQUESTS" ]; then
+      deny "limit_exhausted" "$count"
+    fi
+  done
+fi
+
 while IFS=$'\t' read -r run_id run_attempt; do
   [ -n "$run_id" ] || continue
   if [ "$run_id" = "$RUN_ID" ]; then
