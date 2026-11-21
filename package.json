@@ -1,0 +1,26 @@
+{
+  "name": "ai-for-developers-project-387",
+  "version": "1.2.2",
+  "description": "Учебный сервис бронирования встреч — продолжение проекта 386",
+  "main": "index.js",
+  "scripts": {
+    "dev": "pnpm --parallel --filter apps-web --filter apps-api dev",
+    "contracts:generate": "node scripts/generate-contracts.mjs",
+    "contracts:check": "node scripts/generate-contracts.mjs --check"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ArtemMalafeev/ai-for-developers-project-387.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/ArtemMalafeev/ai-for-developers-project-387/issues"
+  },
+  "homepage": "https://github.com/ArtemMalafeev/ai-for-developers-project-387#readme",
+  "devDependencies": {
+    "shadcn-vue": "^2.9.0"
+  }
+}

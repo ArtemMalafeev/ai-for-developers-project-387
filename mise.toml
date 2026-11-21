@@ -1,0 +1,53 @@
+[tools]
+hk = "2.11.0"
+node = "26.13.0"
+pnpm = "12.16.1"
+
+[tasks.dev]
+description = "Run frontend and backend in development mode"
+run = "pnpm dev"
+
+[tasks.contracts]
+description = "Generate and verify API contract artifacts"
+run = "pnpm contracts:check"
+
+[tasks.lint]
+description = "Lint all workspace packages"
+run = "pnpm -r lint"
+
+[tasks.typecheck]
+description = "Type-check all workspace packages"
+run = "pnpm -r type-check"
+
+[tasks.hk]
+description = "Validate hk configuration"
+run = "hk validate"
+
+[tasks.test]
+description = "Run backend and frontend tests"
+run = ["pnpm --filter apps-api test", "pnpm --filter apps-web test:run"]
+
+[tasks.build]
+description = "Build all workspace packages"
+run = "pnpm -r build"
+
+[tasks.smoke]
+description = "Run fullstack smoke tests"
+run = "node scripts/smoke.mjs"
+
+[tasks.e2e]
+description = "Run browser booking test"
+run = "pnpm --filter apps-web test:e2e"
+
+[tasks.check]
+description = "Run all project checks"
+run = [
+  { task = "contracts" },
+  { task = "hk" },
+  { task = "lint" },
+  { task = "typecheck" },
+  { task = "test" },
+  { task = "build" },
+  { task = "e2e" },
+  { task = "smoke" },
+]
