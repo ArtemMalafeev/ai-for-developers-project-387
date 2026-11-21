@@ -1,5 +1,6 @@
 [tools]
 hk = "2.11.0"
+jactionlint = "2.6.0"
 node = "26.13.0"
 pnpm = "12.16.1"
 
@@ -23,6 +24,10 @@ run = "pnpm -r type-check"
 description = "Validate hk configuration"
 run = "hk validate"
 
+[tasks.actions]
+description = "Validate GitHub Actions workflows"
+run = "jactionlint"
+
 [tasks.test]
 description = "Run backend and frontend tests"
 run = ["pnpm --filter apps-api test", "pnpm --filter apps-web test:run"]
@@ -42,6 +47,7 @@ run = "pnpm --filter apps-web test:e2e"
 [tasks.check]
 description = "Run all project checks"
 run = [
+  { task = "actions" },
   { task = "contracts" },
   { task = "hk" },
   { task = "lint" },
