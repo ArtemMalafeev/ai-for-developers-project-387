@@ -70,10 +70,15 @@ if [ "$exit_code" -ne 0 ]; then
   finish "agent_failed" "$exit_code"
 fi
 
-jq -rs '[.[] | select(.type == "text") | .part.text] | join("\n")' \
-  "$output_dir/opencode.json" > "$REVIEW_PATH" 2>/dev/null || true
+if ! jq -rs '[.[] | select(.type == "text") | .part.text // empty] | join("\n")' \
+  "$output_dir/opencode.json" > "$REVIEW_PATH" 2>> "$LOG_PATH"; then
+  finish "agent_failed" "$exit_code"
+fi
 
-if [ ! -s "$REVIEW_PATH" ]; then
+if ! grep -q '[^[:space:]]' "$REVIEW_PATH"; then
+  printf 'OpenCode produced no review text. Event types: ' >> "$LOG_PATH"
+  jq -rs '[.[] | .type // "unknown"] | group_by(.) | map({type: .[0], count: length})' \
+    "$output_dir/opencode.json" >> "$LOG_PATH" 2>/dev/null || true
   finish "agent_failed" "$exit_code"
 fi
 
