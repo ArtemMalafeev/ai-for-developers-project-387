@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.0](https://github.com/ArtemMalafeev/ai-for-developers-project-387/compare/ai-for-developers-project-387-v1.4.0...ai-for-developers-project-387-v1.5.0) (2026-11-21)
+
+
+### Features
+
+* **nodejs-package:** добавить скиллы OpenCode на раннер ([#17](https://github.com/ArtemMalafeev/ai-for-developers-project-387/issues/17)) ([1a92043](https://github.com/ArtemMalafeev/ai-for-developers-project-387/commit/1a92043555055d2a4771236d77b11e13eed2b5e3))
+* **nodejs-package:** подключить скиллы OpenCode на раннере ([#17](https://github.com/ArtemMalafeev/ai-for-developers-project-387/issues/17)) ([132751f](https://github.com/ArtemMalafeev/ai-for-developers-project-387/commit/132751fa88fa9a44b534003e337eeebab942c7e7))
+
 ## [1.4.0](https://github.com/ArtemMalafeev/ai-for-developers-project-387/compare/ai-for-developers-project-387-v1.3.1...ai-for-developers-project-387-v1.4.0) (2026-11-21)
 
 
