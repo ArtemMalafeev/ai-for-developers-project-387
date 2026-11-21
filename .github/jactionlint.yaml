@@ -6,3 +6,22 @@ ignores:
       member, or collaborator comments, checks out the default branch, and has
       a read-only repository token plus OIDC for the OpenCode GitHub App.
     expires: "2027-02-21"
+  - rule: dangerous-triggers
+    file: .github/workflows/opencode-review-comments.yml
+    reason: >-
+      issue_comment and pull_request_review_comment are required for the /oc
+      request budget on pull requests. The gate accepts only trusted human
+      comments, checks PR ownership before any model call, reads the budget
+      from Actions history without secrets, and the developer agent runs in a
+      separate job with the API key and OIDC.
+    expires: "2027-02-21"
+  - rule: dangerous-triggers
+    file: .github/workflows/opencode-review-finalizer.yml
+    reason: >-
+      workflow_run is required to publish abnormal /oc outcomes after the
+      request workflow has finished, including manual cancellation that skips
+      the in-workflow summary. The finalizer checks out the trusted default
+      branch, receives no model secret, reads only the gate artifact and job
+      conclusions, and publishes only timeout, cancelled, infra and
+      agent_failed.
+    expires: "2027-02-21"

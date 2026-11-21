@@ -28,6 +28,14 @@ run = "hk validate"
 description = "Validate GitHub Actions workflows"
 run = "jactionlint"
 
+[tasks.gate]
+description = "Test the /oc request gate"
+run = "bash scripts/opencode-review/request-guard.test.sh"
+
+[tasks.finalizer]
+description = "Test the /oc preflight and abnormal-result finalizer"
+run = "bash scripts/opencode-review/finalizer.test.sh"
+
 [tasks.test]
 description = "Run backend and frontend tests"
 run = ["pnpm --filter apps-api test", "pnpm --filter apps-web test:run"]
@@ -48,6 +56,8 @@ run = "pnpm --filter apps-web test:e2e"
 description = "Run all project checks"
 run = [
   { task = "actions" },
+  { task = "gate" },
+  { task = "finalizer" },
   { task = "contracts" },
   { task = "hk" },
   { task = "lint" },
