@@ -152,9 +152,9 @@ docker run --rm -p 3000:3000 -e PORT=3000 calendar-calls
 
 ## Деплой
 
-Версия проекта 386 опубликована на Railway:
+Проект 387 опубликован как отдельный сервис на Railway:
 
-**Публичная ссылка:** <https://ai-for-developers-project-386-production-f9717bc1.up.railway.app>
+**Публичная ссылка:** <https://ai-for-developers-project-387-production-776e1189.up.railway.app>
 
 Локальная инструкция для Railway MCP находится в [`docs/agents/mcp-railway.md`](docs/agents/mcp-railway.md). OAuth-сессия и API-токены не хранятся в Git.
 
