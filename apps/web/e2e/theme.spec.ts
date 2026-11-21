@@ -1,12 +1,12 @@
 import { expect, test } from '@playwright/test'
 
+import { THEME_STORAGE_KEY, expectDarkBackgrounds } from './helpers'
+
 declare global {
   interface Window {
     __themeAtDomReady?: Promise<boolean>
   }
 }
-
-const THEME_STORAGE_KEY = 'call-schedule-theme'
 
 test('переключает тему на странице записи и сохраняет выбор после перезагрузки', async ({
   page,
@@ -152,21 +152,13 @@ test('админка целиком работает в тёмной теме', 
   await page.getByRole('button', { name: 'Создать тип встречи' }).click()
   await expect(page.getByRole('heading', { name: newTypeName })).toBeVisible()
 
-  const backgrounds = await page.evaluate(() =>
-    ['.site-header', '.page-shell', '.admin-type-item', '.bookings-card', '[data-slot="card"]']
-      .map((selector) => document.querySelector(selector))
-      .filter((element): element is Element => element !== null)
-      .map((element) => getComputedStyle(element).backgroundColor),
-  )
-  expect(backgrounds.length).toBeGreaterThan(0)
-  for (const color of backgrounds) {
-    const channels =
-      color
-        .match(/[\d.]+/g)
-        ?.slice(0, 3)
-        .map(Number) ?? []
-    expect(Math.max(...channels)).toBeLessThan(90)
-  }
+  await expectDarkBackgrounds(page, [
+    '.site-header',
+    '.page-shell',
+    '.admin-type-item',
+    '.bookings-card',
+    '[data-slot="card"]',
+  ])
 })
 
 test('шапка с переключателем не ломается на 320 и 375 px', async ({ page }) => {

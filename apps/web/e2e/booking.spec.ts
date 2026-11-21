@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test'
 
+import { THEME_STORAGE_KEY, expectDarkBackgrounds } from './helpers'
+
 const timeFormatter = new Intl.DateTimeFormat('ru-RU', {
   timeZone: 'Europe/Moscow',
   hour: '2-digit',
@@ -80,7 +82,7 @@ test('гость записывается в тёмной теме', async ({ pa
   })
   expect(created.ok()).toBe(true)
 
-  await page.addInitScript(() => localStorage.setItem('call-schedule-theme', 'dark'))
+  await page.addInitScript((key) => localStorage.setItem(key, 'dark'), THEME_STORAGE_KEY)
   await page.goto('/booking')
   await expect(page.locator('html')).toHaveClass(/dark/)
   await expect(page.getByRole('button', { name: 'Включить светлую тему' })).toBeVisible()
@@ -100,19 +102,10 @@ test('гость записывается в тёмной теме', async ({ pa
   const confirmation = page.getByRole('status').filter({ hasText: 'Запись подтверждена' })
   await expect(confirmation).toContainText(meetingTypeName)
 
-  const backgrounds = await page.evaluate(() =>
-    ['.site-header', '.page-shell', '.empty-panel', '[data-slot="card"]']
-      .map((selector) => document.querySelector(selector))
-      .filter((element): element is Element => element !== null)
-      .map((element) => getComputedStyle(element).backgroundColor),
-  )
-  expect(backgrounds.length).toBeGreaterThan(0)
-  for (const color of backgrounds) {
-    const channels =
-      color
-        .match(/[\d.]+/g)
-        ?.slice(0, 3)
-        .map(Number) ?? []
-    expect(Math.max(...channels)).toBeLessThan(90)
-  }
+  await expectDarkBackgrounds(page, [
+    '.site-header',
+    '.page-shell',
+    '.empty-panel',
+    '[data-slot="card"]',
+  ])
 })

@@ -59,7 +59,16 @@ body,
 .button,
 .schedule-row,
 .schedule-row-active,
-.list-marker {
+.list-marker,
+.page-shell,
+.meeting-type-card,
+.empty-panel,
+.loading-state,
+.booking-confirmation,
+.admin-type-item,
+.calendar-card [data-slot='calendar'],
+[data-slot='card'],
+[data-slot='table-row'] {
   transition-property: background-color, color, border-color, box-shadow, transform;
   transition-duration: 150ms;
   transition-timing-function: ease;
@@ -76,25 +85,6 @@ body,
     transition-duration: 0s !important;
     animation-duration: 0s !important;
     animation-iteration-count: 1 !important;
-  }
-
-  body,
-  .site-header,
-  .site-footer,
-  .hero-section,
-  .roles-section,
-  .cta-section,
-  .cta-panel,
-  .hero-card,
-  .role-card,
-  .role-icon,
-  .brand-mark,
-  .nav-link,
-  .button,
-  .schedule-row,
-  .schedule-row-active,
-  .list-marker {
-    transition: none;
   }
 }
 
@@ -473,7 +463,7 @@ h1 {
 
 .role-card-owner .role-icon {
   color: var(--app-text-secondary);
-  background: var(--app-border);
+  background: var(--app-icon-muted-background);
 }
 
 .role-label {
@@ -1063,7 +1053,7 @@ h1 {
   padding: 16px;
   border: 1px solid var(--app-border-soft);
   border-radius: 10px;
-  background: var(--app-page-background);
+  background: var(--app-item-background);
 }
 
 .admin-type-item h2 {

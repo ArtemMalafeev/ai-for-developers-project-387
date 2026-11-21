@@ -1,6 +1,6 @@
 const THEME_STORAGE_KEY = 'call-schedule-theme'
 
-const loadTheme = async () => {
+const loadThemeModule = async () => {
   vi.resetModules()
   return import('@/lib/useTheme')
 }
@@ -23,7 +23,7 @@ describe('useTheme', () => {
   })
 
   it('по умолчанию включает светлую тему', async () => {
-    const { useTheme } = await loadTheme()
+    const { useTheme } = await loadThemeModule()
     const { isDark } = useTheme()
 
     expect(isDark.value).toBe(false)
@@ -33,7 +33,7 @@ describe('useTheme', () => {
 
   it('применяет сохранённую тёмную тему', async () => {
     localStorage.setItem(THEME_STORAGE_KEY, 'dark')
-    const { useTheme } = await loadTheme()
+    const { useTheme } = await loadThemeModule()
     const { isDark } = useTheme()
 
     expect(isDark.value).toBe(true)
@@ -42,7 +42,7 @@ describe('useTheme', () => {
   })
 
   it('переключает класс и значение в хранилище в обе стороны', async () => {
-    const { useTheme } = await loadTheme()
+    const { useTheme } = await loadThemeModule()
     const { isDark, toggle } = useTheme()
 
     toggle()
@@ -62,7 +62,7 @@ describe('useTheme', () => {
     'трактует невалидное значение %j как светлую тему и очищает ключ',
     async (value) => {
       localStorage.setItem(THEME_STORAGE_KEY, value)
-      const { useTheme } = await loadTheme()
+      const { useTheme } = await loadThemeModule()
       const { isDark } = useTheme()
 
       expect(isDark.value).toBe(false)
@@ -79,7 +79,7 @@ describe('useTheme', () => {
       setItem: () => {},
       removeItem: () => {},
     })
-    const { useTheme } = await loadTheme()
+    const { useTheme } = await loadThemeModule()
 
     expect(() => useTheme()).not.toThrow()
     expect(useTheme().isDark.value).toBe(false)
@@ -95,7 +95,7 @@ describe('useTheme', () => {
       },
       removeItem: () => {},
     })
-    const { useTheme } = await loadTheme()
+    const { useTheme } = await loadThemeModule()
     const { isDark, toggle } = useTheme()
 
     expect(() => toggle()).not.toThrow()
@@ -112,13 +112,13 @@ describe('useTheme', () => {
       },
       removeItem: () => {},
     })
-    const first = await loadTheme()
+    const first = await loadThemeModule()
     first.useTheme().toggle()
     expect(root().classList.contains('dark')).toBe(true)
 
     vi.unstubAllGlobals()
     localStorage.clear()
-    const second = await loadTheme()
+    const second = await loadThemeModule()
     expect(second.useTheme().isDark.value).toBe(false)
     expect(root().classList.contains('dark')).toBe(false)
   })
@@ -134,7 +134,7 @@ describe('useTheme', () => {
       )
 
     it.each(['dark', 'light'] as const)('применяет тему %s', async (value) => {
-      const { useTheme } = await loadTheme()
+      const { useTheme } = await loadThemeModule()
       const { isDark } = useTheme()
       if (value === 'light') useTheme().toggle()
 
@@ -148,7 +148,7 @@ describe('useTheme', () => {
       'невалидное значение %j даёт светлую тему и очищает ключ',
       async (value) => {
         localStorage.setItem(THEME_STORAGE_KEY, 'dark')
-        const { useTheme } = await loadTheme()
+        const { useTheme } = await loadThemeModule()
         const { isDark } = useTheme()
         expect(isDark.value).toBe(true)
 
@@ -162,14 +162,27 @@ describe('useTheme', () => {
 
     it('удаление ключа переводит вкладку в светлую тему', async () => {
       localStorage.setItem(THEME_STORAGE_KEY, 'dark')
-      const { useTheme } = await loadTheme()
+      const { useTheme } = await loadThemeModule()
       const { isDark } = useTheme()
       expect(isDark.value).toBe(true)
 
-      dispatchStorage(null, null)
+      dispatchStorage(null)
 
       expect(isDark.value).toBe(false)
       expect(root().classList.contains('dark')).toBe(false)
+    })
+
+    it('удалённое значение ключа переводит вкладку в светлую тему', async () => {
+      localStorage.setItem(THEME_STORAGE_KEY, 'dark')
+      const { useTheme } = await loadThemeModule()
+      const { isDark } = useTheme()
+      expect(isDark.value).toBe(true)
+
+      dispatchStorage(null, THEME_STORAGE_KEY)
+
+      expect(isDark.value).toBe(false)
+      expect(root().classList.contains('dark')).toBe(false)
+      expect(localStorage.getItem(THEME_STORAGE_KEY)).toBeNull()
     })
   })
 })

@@ -42,6 +42,8 @@
   --app-surface: #ffffff;
   --app-surface-muted: #f8f9fb;
   --app-page-background: #f8fafc;
+  --app-item-background: #f8fafc;
+  --app-icon-muted-background: #e5e7eb;
   --app-surface-owner: #f5f7fa;
   --app-surface-guest: #f4f8ff;
   --app-surface-glass: rgb(255 255 255 / 82%);
@@ -125,6 +127,8 @@
   --app-surface: #111a2c;
   --app-surface-muted: #0f1a2e;
   --app-page-background: #0c1526;
+  --app-item-background: #0f1a2e;
+  --app-icon-muted-background: #1e293b;
   --app-surface-owner: #0f1a2e;
   --app-surface-guest: #0d1b33;
   --app-surface-glass: rgb(17 26 44 / 88%);
