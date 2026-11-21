@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.7.0](https://github.com/ArtemMalafeev/ai-for-developers-project-387/compare/ai-for-developers-project-387-v1.6.0...ai-for-developers-project-387-v1.7.0) (2026-11-21)
+
+
+### Features
+
+* **nodejs-package:** добавить авторевью и лимит PR ([#39](https://github.com/ArtemMalafeev/ai-for-developers-project-387/issues/39)) ([2e0973d](https://github.com/ArtemMalafeev/ai-for-developers-project-387/commit/2e0973d7199abbf312ceb94b746442e3f34079d7))
+
+
+### Bug Fixes
+
+* **nodejs-package:** исправить чтение данных PR в авторевью ([#39](https://github.com/ArtemMalafeev/ai-for-developers-project-387/issues/39)) ([851b138](https://github.com/ArtemMalafeev/ai-for-developers-project-387/commit/851b138241062ec184f7740b1346dd5aab4f0324))
+
 ## [1.6.0](https://github.com/ArtemMalafeev/ai-for-developers-project-387/compare/ai-for-developers-project-387-v1.5.3...ai-for-developers-project-387-v1.6.0) (2026-11-21)
 
 
