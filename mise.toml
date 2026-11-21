@@ -40,6 +40,10 @@ run = "bash scripts/opencode-review/finalizer.test.sh"
 description = "Test OpenCode review output classification"
 run = "bash scripts/opencode-review/run-review.test.sh"
 
+[tasks.review-context]
+description = "Test linked issue context for independent review"
+run = "bash scripts/opencode-review/build-context.test.sh"
+
 [tasks.test]
 description = "Run backend and frontend tests"
 run = ["pnpm --filter apps-api test", "pnpm --filter apps-web test:run"]
@@ -63,6 +67,7 @@ run = [
   { task = "gate" },
   { task = "finalizer" },
   { task = "review-output" },
+  { task = "review-context" },
   { task = "contracts" },
   { task = "hk" },
   { task = "lint" },

@@ -35,6 +35,8 @@ jq -e . "$runs_file" >/dev/null 2>&1 || printf '[]\n' > "$runs_file"
   jq -r '(.closingIssuesReferences // [])[].number' "$pr_json"
   jq -r '.body // ""' "$pr_json" | grep -oE '#[0-9]+' | tr -d '#' || true
 } | sort -n -u | head -n 10 > "$output_dir/issue-numbers.txt"
+jq '[.body // "" | scan("issuecomment-[0-9]+") ] | unique' \
+  "$pr_json" > "$output_dir/issue-comment-ids.json"
 
 jq -n '[]' > "$issues_file"
 while IFS= read -r issue_number; do
@@ -42,7 +44,11 @@ while IFS= read -r issue_number; do
   issue_json="$output_dir/issues/issue-$issue_number.json"
   if gh issue view "$issue_number" --repo "$REPO" \
     --json number,title,body,state,url,labels,comments > "$issue_json"; then
-    jq --slurpfile issue "$issue_json" '. + $issue' "$issues_file" > "$issues_file.next"
+    jq --slurpfile referenced "$output_dir/issue-comment-ids.json" \
+      '.comments |= map(select(.url as $url | any($referenced[0][]; . as $id | $url | endswith($id))))' \
+      "$issue_json" > "$issue_json.selected"
+    jq -c --slurpfile issue "$issue_json.selected" '. + $issue' \
+      "$issues_file" > "$issues_file.next"
     mv "$issues_file.next" "$issues_file"
   else
     jq --argjson number "$issue_number" \
