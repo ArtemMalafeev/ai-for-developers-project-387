@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/ArtemMalafeev/ai-for-developers-project-387/compare/calendar-api-client-v0.1.1...calendar-api-client-v0.1.2) (2026-11-21)
+
+
+### Features
+
+* **nodejs-package:** перенести исходные файлы проекта 386 ([#1](https://github.com/ArtemMalafeev/ai-for-developers-project-387/issues/1)) ([abbfa68](https://github.com/ArtemMalafeev/ai-for-developers-project-387/commit/abbfa681b004df1353b59956c47394eb0126fb26))
+
 ## [0.1.1](https://github.com/ArtemMalafeev/ai-for-developers-project-386/compare/calendar-api-client-v0.1.0...calendar-api-client-v0.1.1) (2026-11-11)
 
 
