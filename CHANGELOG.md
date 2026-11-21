@@ -12,6 +12,18 @@
 
 * **nodejs-package:** запускать проверки release PR автоматически ([#8](https://github.com/ArtemMalafeev/ai-for-developers-project-387/issues/8)) ([a40b9b8](https://github.com/ArtemMalafeev/ai-for-developers-project-387/commit/a40b9b86078e075405c9105d150674c9a6eb4b5e))
 
+## [1.3.0](https://github.com/ArtemMalafeev/ai-for-developers-project-387/compare/ai-for-developers-project-387-v1.2.2...ai-for-developers-project-387-v1.3.0) (2026-11-21)
+
+
+### Features
+
+* **nodejs-package:** перенести исходные файлы проекта 386 ([#1](https://github.com/ArtemMalafeev/ai-for-developers-project-387/issues/1)) ([abbfa68](https://github.com/ArtemMalafeev/ai-for-developers-project-387/commit/abbfa681b004df1353b59956c47394eb0126fb26))
+
+
+### Bug Fixes
+
+* **nodejs-package:** запускать проверки release PR автоматически ([#8](https://github.com/ArtemMalafeev/ai-for-developers-project-387/issues/8)) ([a40b9b8](https://github.com/ArtemMalafeev/ai-for-developers-project-387/commit/a40b9b86078e075405c9105d150674c9a6eb4b5e))
+
 ## [1.2.2](https://github.com/ArtemMalafeev/ai-for-developers-project-386/compare/ai-for-developers-project-386-v1.2.1...ai-for-developers-project-386-v1.2.2) (2026-11-14)
 
 
