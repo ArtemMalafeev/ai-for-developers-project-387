@@ -39,10 +39,11 @@ jobs:
 
       - name: Make agent skills available
         run: |
-          mkdir -p "$HOME/.config/opencode/skills"
-          cp -R .agent-skill-source/skills/engineering/. "$HOME/.config/opencode/skills/"
-          cp -R .agent-skill-source/skills/productivity/. "$HOME/.config/opencode/skills/"
-          test "$(find "$HOME/.config/opencode/skills" -name SKILL.md | wc -l | tr -d ' ')" = 27
+          mkdir -p .opencode/skills
+          cp -R .agent-skill-source/skills/engineering/. .opencode/skills/
+          cp -R .agent-skill-source/skills/productivity/. .opencode/skills/
+          test "$(find .opencode/skills -name SKILL.md | wc -l | tr -d ' ')" = 27
+          printf '%s\n' '/.opencode/skills/' >> .git/info/exclude
           rm -rf .agent-skill-source
 
       - name: Run OpenCode
