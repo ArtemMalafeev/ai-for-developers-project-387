@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.2](https://github.com/ArtemMalafeev/ai-for-developers-project-387/compare/ai-for-developers-project-387-v1.5.1...ai-for-developers-project-387-v1.5.2) (2026-11-21)
+
+
+### Bug Fixes
+
+* **nodejs-package:** игнорировать команды ботов в OpenCode ([#17](https://github.com/ArtemMalafeev/ai-for-developers-project-387/issues/17)) ([c9da304](https://github.com/ArtemMalafeev/ai-for-developers-project-387/commit/c9da304bcd8035614ae20c67e4d2ef4eaa470f6a))
+* **nodejs-package:** игнорировать команды ботов в OpenCode ([#17](https://github.com/ArtemMalafeev/ai-for-developers-project-387/issues/17)) ([b67e23b](https://github.com/ArtemMalafeev/ai-for-developers-project-387/commit/b67e23ba20c424bd35ec8d53833a71c3c7aa44b7))
+
 ## [1.5.1](https://github.com/ArtemMalafeev/ai-for-developers-project-387/compare/ai-for-developers-project-387-v1.5.0...ai-for-developers-project-387-v1.5.1) (2026-11-21)
 
 
