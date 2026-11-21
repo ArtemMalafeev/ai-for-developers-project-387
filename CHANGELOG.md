@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.3](https://github.com/ArtemMalafeev/ai-for-developers-project-387/compare/ai-for-developers-project-387-v1.5.2...ai-for-developers-project-387-v1.5.3) (2026-11-21)
+
+
+### Bug Fixes
+
+* **opencode:** убрать зависание на доступе к /tmp ([#25](https://github.com/ArtemMalafeev/ai-for-developers-project-387/issues/25)) ([16ad17b](https://github.com/ArtemMalafeev/ai-for-developers-project-387/commit/16ad17bbb2fbf922eef4467d86fe6fd4ec82773a))
+
 ## [1.5.2](https://github.com/ArtemMalafeev/ai-for-developers-project-387/compare/ai-for-developers-project-387-v1.5.1...ai-for-developers-project-387-v1.5.2) (2026-11-21)
 
 
