@@ -1,0 +1,252 @@
+# Готовый workflow ручных запросов /oc на pull request.
+# GitHub App, которым пушит OpenCode, не имеет права создавать файлы в
+# .github/workflows. Человек должен перенести этот файл в
+# .github/workflows/opencode-review-comments.yml и закоммитить его обычными правами.
+#
+# Бюджет в три запроса хранится в скрытом служебном комментарии PR. Каждый
+# запуск, включая повторный run_attempt, отмену и тайм-аут, расходует попытку до
+# вызова модели. Автоматическое ревью по событиям pull_request в бюджет не входит.
+name: OpenCode Review Request
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+run-name: OpenCode review request PR #${{ github.event.issue.number || github.event.pull_request.number }} attempt ${{ github.run_attempt }}
+
+concurrency:
+  group: opencode-review-request-${{ github.event.issue.number || github.event.pull_request.number }}
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  request:
+    if: >-
+      (contains(github.event.comment.body, '/oc') || contains(github.event.comment.body, '/opencode')) &&
+      github.event.comment.user.type != 'Bot' &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) &&
+      (github.event_name == 'pull_request_review_comment' || github.event.issue.pull_request != null)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    outputs:
+      admitted: ${{ steps.guard.outputs.admitted }}
+      reason: ${{ steps.guard.outputs.reason }}
+      used: ${{ steps.guard.outputs.used }}
+      head_sha: ${{ steps.guard.outputs.head_sha }}
+      pr_number: ${{ steps.pr.outputs.number }}
+    steps:
+      - name: Checkout trusted default branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Resolve pull request number
+        id: pr
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "pull_request_review_comment" ]; then
+            printf 'number=%s\n' "$PULL_REQUEST_NUMBER" >> "$GITHUB_OUTPUT"
+          else
+            printf 'number=%s\n' "$ISSUE_NUMBER" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check trust and request budget
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          MAX_REQUESTS: "3"
+        run: bash scripts/opencode-review/request-guard.sh
+
+  review:
+    needs: request
+    if: needs.request.outputs.admitted == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+      checks: read
+      actions: read
+      statuses: read
+    steps:
+      - name: Checkout trusted default branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Install OpenCode CLI
+        env:
+          OPENCODE_VERSION: 1.19.6
+          OPENCODE_SHA256: 47734e08968b30cc22a0bffb6d9feeed76ad4aa743213a12122040392d09a057
+        run: |
+          set -euo pipefail
+          archive=/tmp/opencode-linux-x64.tar.gz
+          mkdir -p "$HOME/.opencode/bin"
+          curl -fsSL --retry 3 -o "$archive" \
+            "https://github.com/anomalyco/opencode/releases/download/v${OPENCODE_VERSION}/opencode-linux-x64.tar.gz"
+          printf '%s  %s\n' "$OPENCODE_SHA256" "$archive" | sha256sum -c -
+          tar -xzf "$archive" -C "$HOME/.opencode/bin" opencode
+          chmod +x "$HOME/.opencode/bin/opencode"
+          echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
+
+      - name: Build review context
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ needs.request.outputs.pr_number }}
+          HEAD_SHA: ${{ needs.request.outputs.head_sha }}
+          OUTPUT_DIR: .review-context
+        run: bash scripts/opencode-review/build-context.sh
+
+      - name: Run independent review
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          OPENCODE_CONFIG_CONTENT: |-
+            {
+              "permission": {
+                "*": "deny",
+                "bash": "deny",
+                "edit": "deny",
+                "webfetch": "deny",
+                "websearch": "deny",
+                "task": "deny",
+                "skill": "deny",
+                "question": "deny",
+                "todowrite": "deny",
+                "doom_loop": "deny",
+                "external_directory": {
+                  "*": "deny"
+                },
+                "read": {
+                  "*": "deny",
+                  ".review-context/review-input.md": "allow",
+                  "**/.review-context/review-input.md": "allow"
+                }
+              }
+            }
+          RESULT_PATH: .review-context/result.json
+          REVIEW_PATH: .review-context/review.md
+          LOG_PATH: .review-context/opencode.log
+          PROMPT_FILE: scripts/opencode-review/prompt.md
+          CONTEXT_FILE: .review-context/review-input.md
+          HEAD_SHA: ${{ needs.request.outputs.head_sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TIMEOUT_SECONDS: "1200"
+        run: bash scripts/opencode-review/run-review.sh
+
+      - name: Upload review result
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: opencode-review-request-${{ needs.request.outputs.head_sha }}
+          path: |
+            .review-context/result.json
+            .review-context/review.md
+            .review-context/opencode.log
+          if-no-files-found: warn
+          retention-days: 7
+
+  summary:
+    needs: [request, review]
+    if: >-
+      always() &&
+      (contains(github.event.comment.body, '/oc') || contains(github.event.comment.body, '/opencode')) &&
+      github.event.comment.user.type != 'Bot' &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) &&
+      (github.event_name == 'pull_request_review_comment' || github.event.issue.pull_request != null)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Checkout trusted default branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Download review result
+        continue-on-error: true
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: opencode-review-request-${{ needs.request.outputs.head_sha }}
+          path: .review-context
+
+      - name: Publish result
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ needs.request.outputs.pr_number || github.event.issue.number || github.event.pull_request.number }}
+          EVENT_HEAD_SHA: ${{ needs.request.outputs.head_sha }}
+          REQUEST_RESULT: ${{ needs.request.result }}
+          REVIEW_RESULT: ${{ needs.review.result }}
+          REQUEST_ADMITTED: ${{ needs.request.outputs.admitted }}
+          REQUEST_REASON: ${{ needs.request.outputs.reason }}
+          REQUEST_USED: ${{ needs.request.outputs.used }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          head_sha="$EVENT_HEAD_SHA"
+          if [ -z "$head_sha" ]; then
+            head_sha="$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefOid --jq .headRefOid)"
+          fi
+
+          reason=infra
+          review_path=""
+          if [ "$REQUEST_ADMITTED" != "true" ]; then
+            if [ -n "$REQUEST_REASON" ]; then
+              reason="$REQUEST_REASON"
+            elif [ "$REQUEST_RESULT" = "cancelled" ]; then
+              reason=cancelled
+            fi
+          elif [ -f .review-context/result.json ]; then
+            reason="$(jq -r '.reason // "infra"' .review-context/result.json)"
+            reviewed_sha="$(jq -r '.sha // empty' .review-context/result.json)"
+            head_sha="${reviewed_sha:-$head_sha}"
+            review_path=".review-context/review.md"
+          else
+            case "$REVIEW_RESULT" in
+              cancelled) reason=cancelled ;;
+              *) reason=infra ;;
+            esac
+          fi
+
+          if [ "$reason" = success ] && [ ! -s "$review_path" ]; then
+            reason=agent_failed
+            review_path=""
+          fi
+
+          current_head="$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefOid --jq .headRefOid)"
+          if [ "$REQUEST_ADMITTED" = "true" ] && [ "$current_head" != "$head_sha" ]; then
+            reason=stale
+            review_path=""
+          fi
+
+          REASON="$reason" \
+          HEAD_SHA="$head_sha" \
+          RUN_URL="$RUN_URL" \
+          REVIEW_PATH="$review_path" \
+          USED="$REQUEST_USED" \
+          LIMIT="3" \
+          OUTPUT_PATH=.review-context/comment.md \
+            bash scripts/opencode-review/publish-result.sh
+
+          gh pr comment "$PR_NUMBER" --repo "$REPO" --body-file .review-context/comment.md

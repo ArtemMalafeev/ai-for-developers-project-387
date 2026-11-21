@@ -6,3 +6,11 @@ ignores:
       member, or collaborator comments, checks out the default branch, and has
       a read-only repository token plus OIDC for the OpenCode GitHub App.
     expires: "2027-02-21"
+  - rule: dangerous-triggers
+    file: .github/workflows/opencode-review-comments.yml
+    reason: >-
+      issue_comment and pull_request_review_comment are required for the /oc
+      request budget on pull requests. The workflow accepts only trusted human
+      comments, checks PR ownership before any model call, never exposes
+      secrets to the reviewer, and publishes results in a separate job.
+    expires: "2027-02-21"

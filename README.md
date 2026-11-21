@@ -164,18 +164,54 @@ docker run --rm -p 3000:3000 -e PORT=3000 calendar-calls
 
 ## OpenCode в GitHub
 
-В репозитории подключён OpenCode GitHub App, а сценарий работы описан в workflow [`.github/workflows/opencode.yml`](.github/workflows/opencode.yml). Агент запускается по событиям `issue_comment` и `pull_request_review_comment` с `types: [created]`.
+В репозитории подключён OpenCode GitHub App. События комментариев и pull request разделены: `/oc` в обычном issue запускает агента [`.github/workflows/opencode.yml`](.github/workflows/opencode.yml), автоматическое ревью PR запускается отдельным workflow, а `/oc` в комментарии к PR проходит через отдельный workflow с бюджетом запросов.
 
-- **Команды:** `/opencode` и `/oc` в комментарии.
+### Установка pending workflow
+
+GitHub App, которым пушит OpenCode, не имеет права создавать и изменять файлы в `.github/workflows`. Поэтому новые workflow подготовлены как `.pending`, а не записаны напрямую. Человек с обычными правами должен перенести их в `.github/workflows` и закоммитить:
+
+```bash
+mv .github/opencode-review.yml.pending .github/workflows/opencode-review.yml
+mv .github/opencode-review-comments.yml.pending .github/workflows/opencode-review-comments.yml
+cp .github/opencode.yml.pending .github/workflows/opencode.yml
+```
+
+После установки проверьте `mise run actions`, откройте PR из доверенной ветки этого репозитория и убедитесь, что авторевью, браузерная проверка и лимит запросов работают до реализации #25.
+
+### Команды в issue
+
+- **Команды:** `/opencode` и `/oc` в комментарии к issue.
 - **Авторы:** только участники с ролью `OWNER`, `MEMBER` или `COLLABORATOR`; комментарии ботов пропускаются.
 - **Модель:** `opencode/deepseek-v4.1-flash`.
 - **Доступ:** секрет `OPENCODE_API_KEY` и OIDC-токен для OpenCode GitHub App.
 - **Публикация:** `share: false` — сессия не публикуется по внешней ссылке.
-- **Ограничения:** тайм-аут 30 минут; для одного issue или PR одновременно выполняется только один запуск.
+- **Ограничения:** тайм-аут 30 минут; для одного issue одновременно выполняется только один запуск.
 
-Workflow проверяет команду и роль автора, берёт код из ветки по умолчанию и устанавливает на раннер 27 стабильных скиллов [`mattpocock/skills`](https://github.com/mattpocock/skills) версии 1.3.2. Настройки трекера задач, меток triage и доменных документов агент читает из `docs/agents/`.
+Агент проверяет команду и роль автора, берёт код из ветки по умолчанию и устанавливает на раннер 27 стабильных скиллов [`mattpocock/skills`](https://github.com/mattpocock/skills) версии 1.3.2. Настройки трекера задач, меток triage и доменных документов агент читает из `docs/agents/`. Ответ и логи видны в [GitHub Actions](https://github.com/ArtemMalafeev/ai-for-developers-project-387/actions/workflows/opencode.yml).
 
-Агент отвечает на запрос комментарием в issue или PR, а ход выполнения и логи видны в [GitHub Actions](https://github.com/ArtemMalafeev/ai-for-developers-project-387/actions/workflows/opencode.yml).
+### Авторевью pull request
+
+После установки [`.github/opencode-review.yml.pending`](.github/opencode-review.yml.pending) открытые и обновлённые PR проверяет независимый ревьюер через обычный OpenCode CLI.
+
+- **События:** только `pull_request` (`opened`, `synchronize`, `reopened`, `ready_for_review`); комментарии и PR не смешиваются в одном запуске.
+- **Допуск:** только PR из веток этого репозитория от `OWNER`, `MEMBER`, `COLLABORATOR` или конкретного бота `opencode-agent[bot]`. Fork и черновики пропускаются. Используется `pull_request`, а не `pull_request_target`, поэтому fork-запуски не получают секреты.
+- **Доверенные инструкции:** ревьюер читает `REVIEW.md`, `AGENTS.md`, глоссарий и ADR из ветки по умолчанию. Описание PR, diff, issue и логи передаются как недоверенные данные; инструкции из них не выполняются.
+- **Безопасность:** у ревьюера отключены shell, запись файлов, сеть, задачи и скиллы. Он читает только подготовленный `review-input.md`, не получает `GH_TOKEN` и не может изменить код.
+- **Публикация:** отчёт публикуется отдельным заданием с правом `pull-requests: write`, только если head PR не изменился. Итог содержит причину, проверенный SHA и ссылку на логи/артефакты.
+- **Итоги:** `success`, `timeout`, `infra`, `agent_failed`, `cancelled` и `stale` публикуются отдельно; частичный отчёт при ошибке не выдаётся за ревью.
+- **Обновления:** для одного PR отменяется устаревший запуск (`cancel-in-progress: true`), тайм-аут задания 25 минут, запуск модели ограничен 20 минутами.
+- **Браузерная проверка:** отдельное задание Playwright проверяет точный `head.sha` и запускает `playwright test --trace on`. Trace и отчёт загружаются артефактом даже при успешном прогоне.
+
+Критерии ревью для календаря, записи на звонок и ручной тёмной темы #25 находятся в [`REVIEW.md`](REVIEW.md). Шаблон [`.github/pull_request_template.md`](.github/pull_request_template.md) требует ссылки на обращение и согласование, спецификацию и тикеты, команды и результаты проверок, ссылки на CI, проверенный SHA, риск по последствиям ошибки и способ отката.
+
+### Ручные запросы /oc на pull request
+
+После установки [`.github/opencode-review-comments.yml.pending`](.github/opencode-review-comments.yml.pending) запросы `/oc` и `/opencode` в `issue_comment` и `pull_request_review_comment` на PR обрабатывает отдельный workflow.
+
+- **Бюджет:** не более трёх допущенных запросов человека на один PR до вызова модели. Счётчик хранится в служебном комментарии PR.
+- **Учёт:** каждый запуск, включая повторный `run_attempt`, отмену и тайм-аут, расходует попытку. Автоматическое ревью по `pull_request` в бюджет не входит.
+- **Итоги:** `limit_exhausted`, `timeout`, `infra`, `agent_failed` и `untrusted` публикуются отдельным комментарием с причиной, SHA и ссылкой на логи. При `limit_exhausted` модель не вызывается.
+- **Замена старого workflow:** чтобы обойти бюджет было нельзя, [`.github/opencode.yml.pending`](.github/opencode.yml.pending) оставляет общий агент только для обычных issue. Его нужно установить вместо текущего `opencode.yml`.
 
 ## Автотриаж новых обращений
 
