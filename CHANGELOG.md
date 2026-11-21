@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4.0](https://github.com/ArtemMalafeev/ai-for-developers-project-387/compare/ai-for-developers-project-387-v1.3.1...ai-for-developers-project-387-v1.4.0) (2026-11-21)
+
+
+### Features
+
+* **nodejs-package:** настроить OpenCode для комментариев ([#13](https://github.com/ArtemMalafeev/ai-for-developers-project-387/issues/13)) ([1324db7](https://github.com/ArtemMalafeev/ai-for-developers-project-387/commit/1324db7fecbe2bd77ba677271dd799521b1e9e93))
+* **nodejs-package:** настроить OpenCode для комментариев ([#13](https://github.com/ArtemMalafeev/ai-for-developers-project-387/issues/13)) ([1f1dba1](https://github.com/ArtemMalafeev/ai-for-developers-project-387/commit/1f1dba1243af340b17a9a2964e8179a490eb9e45))
+
 ## [1.3.1](https://github.com/ArtemMalafeev/ai-for-developers-project-387/compare/ai-for-developers-project-387-v1.3.0...ai-for-developers-project-387-v1.3.1) (2026-11-21)
 
 
