@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/ArtemMalafeev/ai-for-developers-project-387/compare/apps-web-v1.2.0...apps-web-v1.3.0) (2026-11-21)
+
+
+### Features
+
+* **nodejs-package:** добавить ручную тёмную тему ([#25](https://github.com/ArtemMalafeev/ai-for-developers-project-387/issues/25)) ([#43](https://github.com/ArtemMalafeev/ai-for-developers-project-387/issues/43)) ([6790e08](https://github.com/ArtemMalafeev/ai-for-developers-project-387/commit/6790e08b64efa6ae7c70ba99c2c52a0a4b4bcba6))
+
 ## [1.2.0](https://github.com/ArtemMalafeev/ai-for-developers-project-387/compare/apps-web-v1.1.2...apps-web-v1.2.0) (2026-11-21)
 
 
