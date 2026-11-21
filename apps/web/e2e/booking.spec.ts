@@ -72,3 +72,47 @@ test('владелец создаёт тип встречи, гость запи
   await expect(booking).toContainText(guestName)
   await expect(booking).toContainText(selectedTime)
 })
+
+test('гость записывается в тёмной теме', async ({ page, request }) => {
+  const meetingTypeName = `Тёмная встреча ${Date.now()}`
+  const created = await request.post('/api/owner/meeting-types', {
+    data: { name: meetingTypeName, durationMinutes: 30 },
+  })
+  expect(created.ok()).toBe(true)
+
+  await page.addInitScript(() => localStorage.setItem('call-schedule-theme', 'dark'))
+  await page.goto('/booking')
+  await expect(page.locator('html')).toHaveClass(/dark/)
+  await expect(page.getByRole('button', { name: 'Включить светлую тему' })).toBeVisible()
+
+  const card = page.locator('[data-slot="card"]').filter({ hasText: meetingTypeName })
+  await expect(card.getByRole('heading', { name: meetingTypeName })).toBeVisible()
+  await card.getByRole('button', { name: 'Выбрать время' }).click()
+  await expect(page.getByRole('heading', { name: 'Выберите день и время' })).toBeVisible()
+
+  const slot = page.locator('.slot-grid').getByRole('button').first()
+  await expect(slot).toBeVisible()
+  await slot.click()
+  await page.getByLabel('Имя').fill('Тёмный гость')
+  await page.getByLabel('Email').fill('dark@example.com')
+  await page.getByRole('button', { name: 'Подтвердить запись' }).click()
+
+  const confirmation = page.getByRole('status').filter({ hasText: 'Запись подтверждена' })
+  await expect(confirmation).toContainText(meetingTypeName)
+
+  const backgrounds = await page.evaluate(() =>
+    ['.site-header', '.page-shell', '.empty-panel', '[data-slot="card"]']
+      .map((selector) => document.querySelector(selector))
+      .filter((element): element is Element => element !== null)
+      .map((element) => getComputedStyle(element).backgroundColor),
+  )
+  expect(backgrounds.length).toBeGreaterThan(0)
+  for (const color of backgrounds) {
+    const channels =
+      color
+        .match(/[\d.]+/g)
+        ?.slice(0, 3)
+        .map(Number) ?? []
+    expect(Math.max(...channels)).toBeLessThan(90)
+  }
+})

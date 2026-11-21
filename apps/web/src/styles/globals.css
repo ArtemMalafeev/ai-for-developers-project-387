@@ -41,6 +41,7 @@
   --app-background: #f5f6f8;
   --app-surface: #ffffff;
   --app-surface-muted: #f8f9fb;
+  --app-page-background: #f8fafc;
   --app-surface-owner: #f5f7fa;
   --app-surface-guest: #f4f8ff;
   --app-surface-glass: rgb(255 255 255 / 82%);
@@ -50,6 +51,9 @@
   --app-text-strong: #374151;
   --app-text-secondary: #4b5563;
   --app-text-muted: #6b7280;
+  --app-text-slate: #64748b;
+  --app-text-slate-strong: #334155;
+  --app-text-slate-faint: #94a3b8;
   --app-text-faint: #9ca3af;
   --app-heading: #111827;
   --app-border: #e5e7eb;
@@ -120,6 +124,7 @@
   --app-background: #0b1120;
   --app-surface: #111a2c;
   --app-surface-muted: #0f1a2e;
+  --app-page-background: #0c1526;
   --app-surface-owner: #0f1a2e;
   --app-surface-guest: #0d1b33;
   --app-surface-glass: rgb(17 26 44 / 88%);
@@ -129,6 +134,9 @@
   --app-text-strong: #cbd5e1;
   --app-text-secondary: #cbd5e1;
   --app-text-muted: #a8b3c4;
+  --app-text-slate: #a8b3c4;
+  --app-text-slate-strong: #cbd5e1;
+  --app-text-slate-faint: #94a3b8;
   --app-text-faint: #94a3b8;
   --app-heading: #f8fafc;
   --app-border: #263449;
