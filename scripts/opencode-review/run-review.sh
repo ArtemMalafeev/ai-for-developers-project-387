@@ -51,7 +51,7 @@ timeout --signal=TERM --kill-after=20s "$timeout_seconds" \
   --model "$model" \
   --title "Авторевью PR (${HEAD_SHA:0:12})" \
   --file "$CONTEXT_FILE" \
-  "$(cat "$PROMPT_FILE")" \
+  -- "$(cat "$PROMPT_FILE")" \
   > "$output_dir/opencode.json" 2> "$LOG_PATH"
 exit_code=$?
 set -e

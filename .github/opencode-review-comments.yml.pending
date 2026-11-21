@@ -3,9 +3,11 @@
 # .github/workflows. Человек должен перенести этот файл в
 # .github/workflows/opencode-review-comments.yml и закоммитить его обычными правами.
 #
-# Бюджет в три запроса хранится в скрытом служебном комментарии PR. Каждый
-# запуск, включая повторный run_attempt, отмену и тайм-аут, расходует попытку до
-# вызова модели. Автоматическое ревью по событиям pull_request в бюджет не входит.
+# Сначала отдельное задание gate проверяет доверие и бюджет. Только после
+# успешного gate запускается прежний anomalyco/opencode/github, который читает
+# общий или построчный комментарий и может исправить код. Бюджет считается по
+# истории GitHub Actions, а не по комментарию PR: токен GitHub App разработчика
+# не должен иметь возможности переписать счётчик.
 name: OpenCode Review Request
 
 on:
@@ -14,7 +16,7 @@ on:
   pull_request_review_comment:
     types: [created]
 
-run-name: OpenCode review request PR #${{ github.event.issue.number || github.event.pull_request.number }} attempt ${{ github.run_attempt }}
+run-name: OpenCode request gate PR #${{ github.event.issue.number || github.event.pull_request.number }} attempt ${{ github.run_attempt }}
 
 concurrency:
   group: opencode-review-request-${{ github.event.issue.number || github.event.pull_request.number }}
@@ -23,7 +25,8 @@ concurrency:
 permissions: {}
 
 jobs:
-  request:
+  gate:
+    name: Gate request
     if: >-
       (contains(github.event.comment.body, '/oc') || contains(github.event.comment.body, '/opencode')) &&
       github.event.comment.user.type != 'Bot' &&
@@ -33,8 +36,8 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
-      issues: write
-      pull-requests: write
+      pull-requests: read
+      actions: read
     outputs:
       admitted: ${{ steps.guard.outputs.admitted }}
       reason: ${{ steps.guard.outputs.reason }}
@@ -71,18 +74,23 @@ jobs:
           MAX_REQUESTS: "3"
         run: bash scripts/opencode-review/request-guard.sh
 
-  review:
-    needs: request
-    if: needs.request.outputs.admitted == 'true'
+      - name: Enforce gate
+        if: steps.guard.outputs.admitted != 'true'
+        env:
+          REASON: ${{ steps.guard.outputs.reason }}
+        run: |
+          set -euo pipefail
+          printf 'Request not admitted: %s\n' "$REASON"
+          exit 1
+
+  agent:
+    needs: gate
+    if: needs.gate.outputs.admitted == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 30
     permissions:
       contents: read
-      pull-requests: read
-      issues: read
-      checks: read
-      actions: read
-      statuses: read
+      id-token: write
     steps:
       - name: Checkout trusted default branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -90,80 +98,87 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
 
-      - name: Install OpenCode CLI
-        env:
-          OPENCODE_VERSION: 1.19.6
-          OPENCODE_SHA256: 47734e08968b30cc22a0bffb6d9feeed76ad4aa743213a12122040392d09a057
+      - name: Checkout agent skills
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: mattpocock/skills
+          ref: 4ae2317ddb22b046e26455e4f9c9b3aaaf62212d # v1.3.2
+          path: .agent-skill-source
+          persist-credentials: false
+
+      - name: Make agent skills available
+        run: |
+          mkdir -p .opencode/skills
+          cp -R .agent-skill-source/skills/engineering/. .opencode/skills/
+          cp -R .agent-skill-source/skills/productivity/. .opencode/skills/
+          test "$(find .opencode/skills -name SKILL.md | wc -l | tr -d ' ')" = 27
+          printf '%s\n' '/.opencode/skills/' >> .git/info/exclude
+          rm -rf .agent-skill-source
+
+      - name: Build normalized event for inline comment
+        if: github.event_name == 'pull_request_review_comment'
+        id: inline
+        run: bash scripts/opencode-review/build-mock-event.sh
+
+      - name: Exchange OIDC token for inline comment
+        if: github.event_name == 'pull_request_review_comment'
+        id: app-token
         run: |
           set -euo pipefail
-          archive=/tmp/opencode-linux-x64.tar.gz
-          mkdir -p "$HOME/.opencode/bin"
-          curl -fsSL --retry 3 -o "$archive" \
-            "https://github.com/anomalyco/opencode/releases/download/v${OPENCODE_VERSION}/opencode-linux-x64.tar.gz"
-          printf '%s  %s\n' "$OPENCODE_SHA256" "$archive" | sha256sum -c -
-          tar -xzf "$archive" -C "$HOME/.opencode/bin" opencode
-          chmod +x "$HOME/.opencode/bin/opencode"
-          echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
+          id_token="$(curl -fsS -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=opencode-github-action" | jq -r .value)"
+          app_token="$(curl -fsS -X POST -H "Authorization: Bearer $id_token" \
+            https://api.opencode.ai/exchange_github_app_token | jq -r .token)"
+          if [ -z "$app_token" ] || [ "$app_token" = "null" ]; then
+            echo "App token exchange failed" >&2
+            exit 1
+          fi
+          echo "::add-mask::$app_token"
+          printf 'token=%s\n' "$app_token" >> "$GITHUB_OUTPUT"
 
-      - name: Build review context
+      - name: Configure git for inline comment
+        if: github.event_name == 'pull_request_review_comment'
         env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          PR_NUMBER: ${{ needs.request.outputs.pr_number }}
-          HEAD_SHA: ${{ needs.request.outputs.head_sha }}
-          OUTPUT_DIR: .review-context
-        run: bash scripts/opencode-review/build-context.sh
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          auth="$(printf 'x-access-token:%s' "$APP_TOKEN" | base64 -w0)"
+          git config --local --unset-all http.https://github.com/.extraheader || true
+          git config --local http.https://github.com/.extraheader "AUTHORIZATION: basic $auth"
 
-      - name: Run independent review
+      - name: Run OpenCode developer agent
+        uses: anomalyco/opencode/github@17b79f4e0c16dcff200b0417567ed22aeb2d7166 # github-v1.2.28
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          # A GitHub runner cannot answer permission prompts from OpenCode.
           OPENCODE_CONFIG_CONTENT: |-
             {
               "permission": {
-                "*": "deny",
-                "bash": "deny",
-                "edit": "deny",
-                "webfetch": "deny",
-                "websearch": "deny",
-                "task": "deny",
-                "skill": "deny",
-                "question": "deny",
-                "todowrite": "deny",
-                "doom_loop": "deny",
                 "external_directory": {
-                  "*": "deny"
-                },
-                "read": {
                   "*": "deny",
-                  ".review-context/review-input.md": "allow",
-                  "**/.review-context/review-input.md": "allow"
+                  "/tmp/*": "allow"
+                },
+                "doom_loop": "deny",
+                "read": {
+                  "*.env": "deny",
+                  "*.env.*": "deny",
+                  "*.env.example": "allow"
                 }
               }
             }
-          RESULT_PATH: .review-context/result.json
-          REVIEW_PATH: .review-context/review.md
-          LOG_PATH: .review-context/opencode.log
-          PROMPT_FILE: scripts/opencode-review/prompt.md
-          CONTEXT_FILE: .review-context/review-input.md
-          HEAD_SHA: ${{ needs.request.outputs.head_sha }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          TIMEOUT_SECONDS: "1200"
-        run: bash scripts/opencode-review/run-review.sh
-
-      - name: Upload review result
-        if: always()
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+          TOKEN: ${{ github.event_name == 'pull_request_review_comment' && steps.app-token.outputs.token || '' }}
+          MOCK_EVENT: ${{ github.event_name == 'pull_request_review_comment' && steps.inline.outputs.context || '' }}
         with:
-          name: opencode-review-request-${{ needs.request.outputs.head_sha }}
-          path: |
-            .review-context/result.json
-            .review-context/review.md
-            .review-context/opencode.log
-          if-no-files-found: warn
-          retention-days: 7
+          model: opencode/deepseek-v4.1-flash
+          mentions: /opencode,/oc
+          share: false
+
+      - name: Remove temporary git credentials
+        if: always() && github.event_name == 'pull_request_review_comment'
+        run: git config --local --unset-all http.https://github.com/.extraheader || true
 
   summary:
-    needs: [request, review]
+    needs: [gate, agent]
     if: >-
       always() &&
       (contains(github.event.comment.body, '/oc') || contains(github.event.comment.body, '/opencode')) &&
@@ -173,7 +188,6 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
-      issues: write
       pull-requests: write
     steps:
       - name: Checkout trusted default branch
@@ -182,71 +196,49 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
 
-      - name: Download review result
-        continue-on-error: true
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
-        with:
-          name: opencode-review-request-${{ needs.request.outputs.head_sha }}
-          path: .review-context
-
-      - name: Publish result
+      - name: Publish gate or agent result
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          PR_NUMBER: ${{ needs.request.outputs.pr_number || github.event.issue.number || github.event.pull_request.number }}
-          EVENT_HEAD_SHA: ${{ needs.request.outputs.head_sha }}
-          REQUEST_RESULT: ${{ needs.request.result }}
-          REVIEW_RESULT: ${{ needs.review.result }}
-          REQUEST_ADMITTED: ${{ needs.request.outputs.admitted }}
-          REQUEST_REASON: ${{ needs.request.outputs.reason }}
-          REQUEST_USED: ${{ needs.request.outputs.used }}
+          PR_NUMBER: ${{ needs.gate.outputs.pr_number || github.event.issue.number || github.event.pull_request.number }}
+          GATE_ADMITTED: ${{ needs.gate.outputs.admitted }}
+          GATE_REASON: ${{ needs.gate.outputs.reason }}
+          GATE_USED: ${{ needs.gate.outputs.used }}
+          GATE_RESULT: ${{ needs.gate.result }}
+          AGENT_RESULT: ${{ needs.agent.result }}
+          HEAD_SHA: ${{ needs.gate.outputs.head_sha }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
 
-          head_sha="$EVENT_HEAD_SHA"
-          if [ -z "$head_sha" ]; then
-            head_sha="$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefOid --jq .headRefOid)"
-          fi
-
-          reason=infra
-          review_path=""
-          if [ "$REQUEST_ADMITTED" != "true" ]; then
-            if [ -n "$REQUEST_REASON" ]; then
-              reason="$REQUEST_REASON"
-            elif [ "$REQUEST_RESULT" = "cancelled" ]; then
-              reason=cancelled
-            fi
-          elif [ -f .review-context/result.json ]; then
-            reason="$(jq -r '.reason // "infra"' .review-context/result.json)"
-            reviewed_sha="$(jq -r '.sha // empty' .review-context/result.json)"
-            head_sha="${reviewed_sha:-$head_sha}"
-            review_path=".review-context/review.md"
-          else
-            case "$REVIEW_RESULT" in
+          reason="$GATE_REASON"
+          if [ "$GATE_ADMITTED" = "true" ]; then
+            case "$AGENT_RESULT" in
+              success) exit 0 ;;
+              cancelled) reason=cancelled ;;
+              failure) reason=agent_failed ;;
+              *) reason=infra ;;
+            esac
+          elif [ -z "$reason" ]; then
+            case "$GATE_RESULT" in
               cancelled) reason=cancelled ;;
               *) reason=infra ;;
             esac
           fi
 
-          if [ "$reason" = success ] && [ ! -s "$review_path" ]; then
-            reason=agent_failed
-            review_path=""
+          head_sha="$HEAD_SHA"
+          if [ -z "$head_sha" ]; then
+            head_sha="$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefOid --jq .headRefOid 2>/dev/null || true)"
           fi
-
-          current_head="$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefOid --jq .headRefOid)"
-          if [ "$REQUEST_ADMITTED" = "true" ] && [ "$current_head" != "$head_sha" ]; then
-            reason=stale
-            review_path=""
-          fi
+          head_sha="${head_sha:-unknown}"
 
           REASON="$reason" \
           HEAD_SHA="$head_sha" \
           RUN_URL="$RUN_URL" \
-          REVIEW_PATH="$review_path" \
-          USED="$REQUEST_USED" \
+          REVIEW_PATH="" \
+          USED="$GATE_USED" \
           LIMIT="3" \
-          OUTPUT_PATH=.review-context/comment.md \
+          OUTPUT_PATH=.opencode-request/comment.md \
             bash scripts/opencode-review/publish-result.sh
 
-          gh pr comment "$PR_NUMBER" --repo "$REPO" --body-file .review-context/comment.md
+          gh pr comment "$PR_NUMBER" --repo "$REPO" --body-file .opencode-request/comment.md

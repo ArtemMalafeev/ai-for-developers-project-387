@@ -10,7 +10,8 @@ ignores:
     file: .github/workflows/opencode-review-comments.yml
     reason: >-
       issue_comment and pull_request_review_comment are required for the /oc
-      request budget on pull requests. The workflow accepts only trusted human
-      comments, checks PR ownership before any model call, never exposes
-      secrets to the reviewer, and publishes results in a separate job.
+      request budget on pull requests. The gate accepts only trusted human
+      comments, checks PR ownership before any model call, reads the budget
+      from Actions history without secrets, and the developer agent runs in a
+      separate job with the API key and OIDC.
     expires: "2027-02-21"

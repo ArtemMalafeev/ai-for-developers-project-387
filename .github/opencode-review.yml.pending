@@ -140,9 +140,22 @@ jobs:
         run: pnpm --filter apps-web exec playwright install --only-shell chromium
 
       - name: Run Playwright with trace
+        id: playwright
         run: pnpm --filter apps-web exec playwright test --trace on
 
-      - name: Upload Playwright trace and report
+      - name: Write Playwright manifest
+        if: always()
+        env:
+          OUTPUT_PATH: apps/web/test-results/manifest.json
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+          TEST_OUTCOME: ${{ steps.playwright.outcome }}
+          TEST_CONCLUSION: ${{ steps.playwright.conclusion }}
+          JOB_STATUS: ${{ job.status }}
+          TEST_COMMAND: pnpm --filter apps-web exec playwright test --trace on
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: bash scripts/opencode-review/write-playwright-manifest.sh
+
+      - name: Upload Playwright trace, report and manifest
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:

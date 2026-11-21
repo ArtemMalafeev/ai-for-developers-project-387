@@ -9,25 +9,63 @@ MAX_REQUESTS="${MAX_REQUESTS:-3}"
 EVENT_NAME="${GITHUB_EVENT_NAME:-unknown}"
 RUN_ID="${GITHUB_RUN_ID:-local}"
 RUN_ATTEMPT="${GITHUB_RUN_ATTEMPT:-1}"
-REQUEST_ID="${RUN_ID}-${RUN_ATTEMPT}"
 OUTPUT="${GITHUB_OUTPUT:-/dev/stdout}"
-MARKER='<!-- opencode-review-budget'
+
+WORKFLOW_FILE="${WORKFLOW_FILE:-}"
+if [ -z "$WORKFLOW_FILE" ] && [ -n "${GITHUB_WORKFLOW_REF:-}" ]; then
+  WORKFLOW_FILE="${GITHUB_WORKFLOW_REF%%@*}"
+  WORKFLOW_FILE="${WORKFLOW_FILE##*/}"
+fi
+WORKFLOW_FILE="${WORKFLOW_FILE:-opencode-review-comments.yml}"
+GATE_JOB_NAME="${GATE_JOB_NAME:-Gate request}"
+RUN_TITLE_PREFIX="${RUN_TITLE_PREFIX:-OpenCode request gate PR #$PR_NUMBER }"
+
+case "$MAX_REQUESTS" in
+  ''|*[!0-9]*) MAX_REQUESTS=3 ;;
+esac
+case "$RUN_ATTEMPT" in
+  ''|*[!0-9]*) RUN_ATTEMPT=1 ;;
+esac
 
 emit() {
   printf '%s=%s\n' "$1" "$2" >> "$OUTPUT"
 }
 
+deny() {
+  local reason="$1"
+  local used="$2"
+  emit "admitted" "false"
+  emit "reason" "$reason"
+  emit "used" "$used"
+  case "$reason" in
+    limit_exhausted)
+      printf 'Лимит запросов /oc для PR #%s исчерпан: %s из %s. Модель не вызывается.\n' \
+        "$PR_NUMBER" "$used" "$MAX_REQUESTS"
+      ;;
+    untrusted)
+      printf 'PR #%s не прошёл проверку доверия. Модель не вызывается.\n' "$PR_NUMBER"
+      ;;
+    *)
+      printf 'Проверка бюджета /oc для PR #%s не удалась (%s). Модель не вызывается.\n' \
+        "$PR_NUMBER" "$reason"
+      ;;
+  esac
+  exit 0
+}
+
+runs_error() {
+  printf 'Не удалось прочитать историю Actions для PR #%s: %s\n' "$PR_NUMBER" "$1" >&2
+  deny "infra" "0"
+}
+
 pr_json="$(gh pr view "$PR_NUMBER" --repo "$REPO" \
-  --json number,headRefOid,isCrossRepository,headRepository,author,authorAssociation,isDraft,url)"
+  --json number,headRefOid,isCrossRepository,headRepository,author,authorAssociation,isDraft,url)" \
+  || deny "infra" "0"
 head_sha="$(printf '%s' "$pr_json" | jq -r '.headRefOid // empty')"
 emit "head_sha" "$head_sha"
 
 if [ -z "$head_sha" ]; then
-  emit "admitted" "false"
-  emit "reason" "untrusted"
-  emit "used" "0"
-  printf 'Не удалось определить head SHA PR #%s.\n' "$PR_NUMBER"
-  exit 0
+  deny "untrusted" "0"
 fi
 
 is_cross_repository="$(printf '%s' "$pr_json" | jq -r '.isCrossRepository')"
@@ -44,70 +82,87 @@ if [ "$author_login" = "opencode-agent[bot]" ]; then
 fi
 
 if [ "$is_cross_repository" != "false" ] || [ "$head_repository" != "$REPO" ]; then
-  emit "admitted" "false"
-  emit "reason" "untrusted"
-  emit "used" "0"
-  printf 'PR #%s пришёл не из этого репозитория.\n' "$PR_NUMBER"
-  exit 0
+  deny "untrusted" "0"
 fi
 
 if [ "$trusted_author" != "true" ]; then
-  emit "admitted" "false"
-  emit "reason" "untrusted"
-  emit "used" "0"
-  printf 'Автор PR #%s не входит в доверенный круг.\n' "$PR_NUMBER"
-  exit 0
+  deny "untrusted" "0"
 fi
 
-comments_json="$(gh api --paginate "repos/$REPO/issues/$PR_NUMBER/comments?per_page=100" | jq -s 'add // []')"
-comment_id="$(printf '%s' "$comments_json" | jq -r --arg marker "$MARKER" \
-  '[.[] | select((.body // "") | contains($marker))][0].id // empty')"
+if ! runs_raw="$(gh api --paginate \
+  "repos/$REPO/actions/workflows/$WORKFLOW_FILE/runs?per_page=100")"; then
+  runs_error "список запусков"
+fi
+
+if ! runs_json="$(printf '%s' "$runs_raw" | jq -s '[.[].workflow_runs[]]')"; then
+  runs_error "разбор списка запусков"
+fi
+
+gate_admitted() {
+  local run_id="$1"
+  local attempt="$2"
+  local jobs_json conclusion
+
+  if ! jobs_json="$(gh api \
+    "repos/$REPO/actions/runs/$run_id/attempts/$attempt/jobs?per_page=100")"; then
+    return 2
+  fi
+  if ! conclusion="$(printf '%s' "$jobs_json" | jq -r --arg name "$GATE_JOB_NAME" \
+    '[.jobs[] | select(.name == $name)][0].conclusion // empty')"; then
+    return 2
+  fi
+  [ "$conclusion" = "success" ]
+}
 
 count=0
-requests='[]'
-if [ -n "$comment_id" ]; then
-  comment_body="$(printf '%s' "$comments_json" | jq -r --argjson id "$comment_id" \
-    '.[] | select(.id == $id) | .body')"
-  payload="$(printf '%s\n' "$comment_body" | sed -n '/<!-- opencode-review-budget/,/-->/p' | sed '1d;$d')"
-  if [ -n "$payload" ]; then
-    count="$(printf '%s' "$payload" | jq -r '.count // 0' 2>/dev/null || printf '0')"
-    requests="$(printf '%s' "$payload" | jq -c '.requests // []' 2>/dev/null || printf '[]')"
+
+if [ "$RUN_ID" != "local" ] && [ "$RUN_ATTEMPT" -gt 1 ]; then
+  for ((attempt = 1; attempt < RUN_ATTEMPT; attempt++)); do
+    rc=0
+    gate_admitted "$RUN_ID" "$attempt" || rc=$?
+    case "$rc" in
+      0) count=$((count + 1)) ;;
+      1) ;;
+      *) runs_error "задание gate для текущего run_attempt $attempt" ;;
+    esac
+    if [ "$count" -ge "$MAX_REQUESTS" ]; then
+      deny "limit_exhausted" "$count"
+    fi
+  done
+fi
+
+while IFS=$'\t' read -r run_id run_attempt; do
+  [ -n "$run_id" ] || continue
+  if [ "$run_id" = "$RUN_ID" ]; then
+    continue
   fi
-fi
-
-case "$count" in
-  ''|*[!0-9]*) count=0 ;;
-esac
-
-if [ "$count" -ge "$MAX_REQUESTS" ]; then
-  emit "admitted" "false"
-  emit "reason" "limit_exhausted"
-  emit "used" "$count"
-  printf 'Лимит запросов /oc для PR #%s исчерпан: %s из %s.\n' "$PR_NUMBER" "$count" "$MAX_REQUESTS"
-  exit 0
-fi
+  case "$run_attempt" in
+    ''|*[!0-9]*) run_attempt=1 ;;
+  esac
+  for ((attempt = 1; attempt <= run_attempt; attempt++)); do
+    rc=0
+    gate_admitted "$run_id" "$attempt" || rc=$?
+    case "$rc" in
+      0) count=$((count + 1)) ;;
+      1) ;;
+      *) runs_error "задание gate для run $run_id попытки $attempt" ;;
+    esac
+    if [ "$count" -ge "$MAX_REQUESTS" ]; then
+      deny "limit_exhausted" "$count"
+    fi
+  done
+done < <(printf '%s' "$runs_json" | jq -r --arg prefix "$RUN_TITLE_PREFIX" '
+  .[]
+  | select(.event == "issue_comment" or .event == "pull_request_review_comment")
+  | select((.display_title // "") | startswith($prefix))
+  | [.id, (.run_attempt // 1)]
+  | @tsv
+')
 
 new_count=$((count + 1))
-new_requests="$(jq -c \
-  --arg id "$REQUEST_ID" \
-  --arg event "$EVENT_NAME" \
-  --arg at "$(date -u +%FT%TZ)" \
-  '. + [{id: $id, event: $event, createdAt: $at}] | .[-50:]' <<< "$requests")"
-new_payload="$(jq -cn \
-  --argjson limit "$MAX_REQUESTS" \
-  --argjson count "$new_count" \
-  --argjson requests "$new_requests" \
-  '{schema: 1, limit: $limit, count: $count, requests: $requests}')"
-new_body="$(printf '%s\n%s\n%s\n\nАвторевью: израсходовано %s из %s запросов.\n' \
-  "$MARKER" "$new_payload" '-->' "$new_count" "$MAX_REQUESTS")"
-
-if [ -n "$comment_id" ]; then
-  gh api --method PATCH "repos/$REPO/issues/comments/$comment_id" -f body="$new_body" >/dev/null
-else
-  gh api --method POST "repos/$REPO/issues/$PR_NUMBER/comments" -f body="$new_body" >/dev/null
-fi
 
 emit "admitted" "true"
 emit "reason" "admitted"
 emit "used" "$new_count"
-printf 'Запрос /oc для PR #%s допущен: %s из %s.\n' "$PR_NUMBER" "$new_count" "$MAX_REQUESTS"
+printf 'Запрос /oc для PR #%s допущен: %s из %s (run %s, attempt %s, event %s).\n' \
+  "$PR_NUMBER" "$new_count" "$MAX_REQUESTS" "$RUN_ID" "$RUN_ATTEMPT" "$EVENT_NAME"

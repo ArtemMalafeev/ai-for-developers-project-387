@@ -200,17 +200,19 @@ cp .github/opencode.yml.pending .github/workflows/opencode.yml
 - **Публикация:** отчёт публикуется отдельным заданием с правом `pull-requests: write`, только если head PR не изменился. Итог содержит причину, проверенный SHA и ссылку на логи/артефакты.
 - **Итоги:** `success`, `timeout`, `infra`, `agent_failed`, `cancelled` и `stale` публикуются отдельно; частичный отчёт при ошибке не выдаётся за ревью.
 - **Обновления:** для одного PR отменяется устаревший запуск (`cancel-in-progress: true`), тайм-аут задания 25 минут, запуск модели ограничен 20 минутами.
-- **Браузерная проверка:** отдельное задание Playwright проверяет точный `head.sha` и запускает `playwright test --trace on`. Trace и отчёт загружаются артефактом даже при успешном прогоне.
+- **Браузерная проверка:** отдельное задание Playwright проверяет точный `head.sha` и запускает `playwright test --trace on`. Артефакт содержит trace, HTML-отчёт и `manifest.json` с фактическим `git rev-parse HEAD`, ожидаемым SHA и результатом теста.
 
 Критерии ревью для календаря, записи на звонок и ручной тёмной темы #25 находятся в [`REVIEW.md`](REVIEW.md). Шаблон [`.github/pull_request_template.md`](.github/pull_request_template.md) требует ссылки на обращение и согласование, спецификацию и тикеты, команды и результаты проверок, ссылки на CI, проверенный SHA, риск по последствиям ошибки и способ отката.
 
 ### Ручные запросы /oc на pull request
 
-После установки [`.github/opencode-review-comments.yml.pending`](.github/opencode-review-comments.yml.pending) запросы `/oc` и `/opencode` в `issue_comment` и `pull_request_review_comment` на PR обрабатывает отдельный workflow.
+После установки [`.github/opencode-review-comments.yml.pending`](.github/opencode-review-comments.yml.pending) запросы `/oc` и `/opencode` в `issue_comment` и `pull_request_review_comment` на PR проходят отдельный gate, а затем запускают прежний агент `anomalyco/opencode/github`. Человек может попросить исправить код в общем комментарии или в построчном комментарии к diff.
 
-- **Бюджет:** не более трёх допущенных запросов человека на один PR до вызова модели. Счётчик хранится в служебном комментарии PR.
-- **Учёт:** каждый запуск, включая повторный `run_attempt`, отмену и тайм-аут, расходует попытку. Автоматическое ревью по `pull_request` в бюджет не входит.
+- **Бюджет:** не более трёх допущенных запусков на один PR. Попытки считаются по истории GitHub Actions (`actions: read`) через явный `run-name` и результат задания `Gate request`, а не по комментарию PR, который токен GitHub App разработчика может переписать.
+- **Учёт:** каждый `run_attempt`, включая Re-run, а также отмена и тайм-аут после допуска, расходует попытку. Четвёртый запрос блокируется до вызова модели.
 - **Итоги:** `limit_exhausted`, `timeout`, `infra`, `agent_failed` и `untrusted` публикуются отдельным комментарием с причиной, SHA и ссылкой на логи. При `limit_exhausted` модель не вызывается.
+- **Полномочия и секрет:** gate читает PR и Actions без секретов; агент получает `OPENCODE_API_KEY` и OIDC в отдельном задании; итог публикует отдельное задание с правом на комментарии.
+- **Проверка gate:** `bash scripts/opencode-review/request-guard.test.sh` или `mise run gate`.
 - **Замена старого workflow:** чтобы обойти бюджет было нельзя, [`.github/opencode.yml.pending`](.github/opencode.yml.pending) оставляет общий агент только для обычных issue. Его нужно установить вместо текущего `opencode.yml`.
 
 ## Автотриаж новых обращений
