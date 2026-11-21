@@ -68,7 +68,11 @@ write_pr() {
     --arg headRepo "$head_repo" \
     '{
       number: 40,
-      head: {sha: "0123456789abcdef0123456789abcdef01234567", repo: {full_name: $headRepo}},
+      head: {
+        ref: "opencode/issue25-20261121213810",
+        sha: "0123456789abcdef0123456789abcdef01234567",
+        repo: {full_name: $headRepo}
+      },
       user: {login: "artem"},
       author_association: $association,
       draft: false,
@@ -133,6 +137,32 @@ write_runs '{"total_count":1,"workflow_runs":[
 write_jobs 44954978888 1 success
 PR_NUMBER=43 run_guard
 assert_decision true admitted 2 "PR #43 counts the admitted legacy request"
+
+write_runs '{"total_count":2,"workflow_runs":[
+  {"id":44954978888,"event":"issue_comment","run_attempt":1,"display_title":"OpenCode request gate PR","head_branch":"main","conclusion":"success"},
+  {"id":44956524120,"event":"pull_request_review_comment","run_attempt":1,"display_title":"OpenCode request gate PR","head_branch":"opencode/issue25-20261121213810","conclusion":"in_progress"}
+]}'
+write_jobs 44956524120 1 success
+PR_NUMBER=43 run_guard
+assert_decision true admitted 3 "PR #43 counts the legacy inline review request"
+
+write_runs '{"total_count":3,"workflow_runs":[
+  {"id":44954978888,"event":"issue_comment","run_attempt":1,"display_title":"OpenCode request gate PR","head_branch":"main","conclusion":"success"},
+  {"id":44956524120,"event":"pull_request_review_comment","run_attempt":1,"display_title":"OpenCode request gate PR","head_branch":"opencode/issue25-20261121213810","conclusion":"success"},
+  {"id":503,"event":"pull_request_review_comment","run_attempt":1,"display_title":"OpenCode request gate PR","head_branch":"other/pr-branch","conclusion":"success"}
+]}'
+write_jobs 503 1 success
+PR_NUMBER=43 run_guard
+assert_decision true admitted 3 "legacy inline requests from another branch are ignored"
+
+write_runs '{"total_count":3,"workflow_runs":[
+  {"id":44954978888,"event":"issue_comment","run_attempt":1,"display_title":"OpenCode request gate PR","head_branch":"main","conclusion":"success"},
+  {"id":44956524120,"event":"pull_request_review_comment","run_attempt":1,"display_title":"OpenCode request gate PR","head_branch":"opencode/issue25-20261121213810","conclusion":"success"},
+  {"id":504,"event":"pull_request_review_comment","run_attempt":1,"display_title":"OpenCode request gate PR","head_branch":"opencode/issue25-20261121213810","conclusion":"success"}
+]}'
+write_jobs 504 1 success
+PR_NUMBER=43 run_guard
+assert_decision false limit_exhausted 3 "legacy inline requests exhaust the PR #43 budget"
 
 write_runs '{"total_count":3,"workflow_runs":[
   {"id":44954978888,"event":"issue_comment","run_attempt":1,"display_title":"OpenCode request gate PR","conclusion":"success"},

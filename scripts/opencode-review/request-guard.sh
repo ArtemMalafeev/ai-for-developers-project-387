@@ -68,6 +68,7 @@ if [ -z "$head_sha" ]; then
 fi
 
 head_repository="$(printf '%s' "$pr_json" | jq -r '.head.repo.full_name // empty')"
+head_branch="$(printf '%s' "$pr_json" | jq -r '.head.ref // empty')"
 author_login="$(printf '%s' "$pr_json" | jq -r '.user.login // empty')"
 author_association="$(printf '%s' "$pr_json" | jq -r '.author_association // empty')"
 
@@ -81,6 +82,10 @@ fi
 
 if [ "$head_repository" != "$REPO" ]; then
   deny "untrusted" "0"
+fi
+
+if [ -z "$head_branch" ]; then
+  deny "infra" "0"
 fi
 
 if [ "$trusted_author" != "true" ]; then
@@ -173,10 +178,18 @@ while IFS=$'\t' read -r run_id run_attempt; do
       deny "limit_exhausted" "$count"
     fi
   done
-done < <(printf '%s' "$runs_json" | jq -r --arg prefix "$RUN_TITLE_PREFIX" '
+done < <(printf '%s' "$runs_json" | jq -r \
+  --arg prefix "$RUN_TITLE_PREFIX" --arg headBranch "$head_branch" '
   .[]
   | select(.event == "issue_comment" or .event == "pull_request_review_comment")
-  | select((.display_title // "") | startswith($prefix))
+  | select(
+      ((.display_title // "") | startswith($prefix)) or
+      (
+        .event == "pull_request_review_comment" and
+        .head_branch == $headBranch and
+        .display_title == "OpenCode request gate PR"
+      )
+    )
   | [.id, (.run_attempt // 1)]
   | @tsv
 ')
