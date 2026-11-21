@@ -1,6 +1,6 @@
 {
   "name": "ai-for-developers-project-387",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "description": "Учебный сервис бронирования встреч — продолжение проекта 386",
   "main": "index.js",
   "scripts": {
