@@ -350,21 +350,21 @@ assert_eq "$SHA" "$(jq -r .headSha "$TMP/gate-artifact.json")" "gate artifact ke
 assert_eq "true" "$(jq -r .admitted "$TMP/gate-artifact.json")" "gate artifact keeps the admission decision"
 assert_eq "2" "$(jq -r .runAttempt "$TMP/gate-artifact.json")" "gate artifact keeps the run attempt"
 
-if grep -q 'finalize-request.sh' "$SCRIPT_DIR/../../.github/opencode-review-finalizer.yml.pending" &&
-  grep -q 'workflow_run:' "$SCRIPT_DIR/../../.github/opencode-review-finalizer.yml.pending" &&
-  ! grep -q 'secrets.OPENCODE_API_KEY' "$SCRIPT_DIR/../../.github/opencode-review-finalizer.yml.pending"; then
+if grep -q 'finalize-request.sh' "$SCRIPT_DIR/../../.github/workflows/opencode-review-finalizer.yml" &&
+  grep -q 'workflow_run:' "$SCRIPT_DIR/../../.github/workflows/opencode-review-finalizer.yml" &&
+  ! grep -q 'secrets.OPENCODE_API_KEY' "$SCRIPT_DIR/../../.github/workflows/opencode-review-finalizer.yml"; then
   pass "finalizer runs on workflow_run without the model secret"
 else
   fail "finalizer workflow is missing workflow_run or receives OPENCODE_API_KEY"
 fi
-if grep -q 'write-gate-artifact.sh' "$SCRIPT_DIR/../../.github/opencode-review-comments.yml.pending" &&
-  grep -q 'preflight.sh' "$SCRIPT_DIR/../../.github/opencode-review-comments.yml.pending"; then
+if grep -q 'write-gate-artifact.sh' "$SCRIPT_DIR/../../.github/workflows/opencode-review-comments.yml" &&
+  grep -q 'preflight.sh' "$SCRIPT_DIR/../../.github/workflows/opencode-review-comments.yml"; then
   pass "request workflow uploads gate data and runs preflight"
 else
   fail "request workflow is missing the gate artifact or preflight"
 fi
-if ! grep -q 'AGENT_RESULT' "$SCRIPT_DIR/../../.github/opencode-review-comments.yml.pending" &&
-  ! grep -q 'reason=agent_failed' "$SCRIPT_DIR/../../.github/opencode-review-comments.yml.pending"; then
+if ! grep -q 'AGENT_RESULT' "$SCRIPT_DIR/../../.github/workflows/opencode-review-comments.yml" &&
+  ! grep -q 'reason=agent_failed' "$SCRIPT_DIR/../../.github/workflows/opencode-review-comments.yml"; then
   pass "in-workflow summary does not guess agent failures from needs"
 else
   fail "in-workflow summary still classifies agent results"

@@ -166,18 +166,9 @@ docker run --rm -p 3000:3000 -e PORT=3000 calendar-calls
 
 В репозитории подключён OpenCode GitHub App. События комментариев и pull request разделены: `/oc` в обычном issue запускает агента [`.github/workflows/opencode.yml`](.github/workflows/opencode.yml), автоматическое ревью PR запускается отдельным workflow, а `/oc` в комментарии к PR проходит через отдельный workflow с бюджетом запросов.
 
-### Установка pending workflow
+### Установленные workflow
 
-GitHub App, которым пушит OpenCode, не имеет права создавать и изменять файлы в `.github/workflows`. Поэтому новые workflow подготовлены как `.pending`, а не записаны напрямую. Человек с обычными правами должен перенести их в `.github/workflows` и закоммитить:
-
-```bash
-mv .github/opencode-review.yml.pending .github/workflows/opencode-review.yml
-mv .github/opencode-review-comments.yml.pending .github/workflows/opencode-review-comments.yml
-mv .github/opencode-review-finalizer.yml.pending .github/workflows/opencode-review-finalizer.yml
-cp .github/opencode.yml.pending .github/workflows/opencode.yml
-```
-
-После установки проверьте `mise run actions`, откройте PR из доверенной ветки этого репозитория и убедитесь, что авторевью, браузерная проверка и лимит запросов работают до реализации #25.
+Авторевью, обработка команд в PR и финализатор находятся в `.github/workflows`. GitHub App не может изменять эту директорию; обновления workflow вносит владелец репозитория обычными правами. Перед изменением проверяйте `mise run actions`, а после публикации — фактические прогоны на PR.
 
 ### Команды в issue
 
@@ -192,7 +183,7 @@ cp .github/opencode.yml.pending .github/workflows/opencode.yml
 
 ### Авторевью pull request
 
-После установки [`.github/opencode-review.yml.pending`](.github/opencode-review.yml.pending) открытые и обновлённые PR проверяет независимый ревьюер через обычный OpenCode CLI.
+[`.github/workflows/opencode-review.yml`](.github/workflows/opencode-review.yml) открытые и обновлённые PR проверяет независимый ревьюер через обычный OpenCode CLI.
 
 - **События:** только `pull_request` (`opened`, `synchronize`, `reopened`, `ready_for_review`); комментарии и PR не смешиваются в одном запуске.
 - **Допуск:** только PR из веток этого репозитория от `OWNER`, `MEMBER`, `COLLABORATOR` или конкретного бота `opencode-agent[bot]`. Fork и черновики пропускаются. Используется `pull_request`, а не `pull_request_target`, поэтому fork-запуски не получают секреты.
@@ -207,16 +198,16 @@ cp .github/opencode.yml.pending .github/workflows/opencode.yml
 
 ### Ручные запросы /oc на pull request
 
-После установки [`.github/opencode-review-comments.yml.pending`](.github/opencode-review-comments.yml.pending) запросы `/oc` и `/opencode` в `issue_comment` и `pull_request_review_comment` на PR проходят отдельный gate, а затем запускают прежний агент `anomalyco/opencode/github`. Человек может попросить исправить код в общем комментарии или в построчном комментарии к diff.
+[`.github/workflows/opencode-review-comments.yml`](.github/workflows/opencode-review-comments.yml) запросы `/oc` и `/opencode` в `issue_comment` и `pull_request_review_comment` на PR проходят отдельный gate, а затем запускают прежний агент `anomalyco/opencode/github`. Человек может попросить исправить код в общем комментарии или в построчном комментарии к diff.
 
 - **Бюджет:** не более трёх допущенных запусков на один PR. Попытки считаются по истории GitHub Actions (`actions: read`) через явный `run-name` и результат задания `Gate request`, а не по комментарию PR, который токен GitHub App разработчика может переписать.
 - **Учёт:** каждый `run_attempt`, включая Re-run, а также отмена и тайм-аут после допуска, расходует попытку. Четвёртый запрос блокируется до вызова модели.
 - **Итоги gate:** `limit_exhausted` и `untrusted` публикует summary внутри workflow, при `limit_exhausted` модель не вызывается.
-- **Аварийные итоги:** после завершения workflow отдельный trusted [`opencode-review-finalizer.yml.pending`](.github/opencode-review-finalizer.yml.pending) на `workflow_run` читает задание agent и gate-артефакт с PR/head. Без модели и без `OPENCODE_API_KEY` он публикует `timeout`, `cancelled`, `infra` и `agent_failed` с SHA и ссылкой на запуск. Успешный ответ агента и решения gate он не дублирует: публикация помечается `run_id` и `run_attempt`.
+- **Аварийные итоги:** после завершения workflow отдельный trusted [`opencode-review-finalizer.yml`](.github/workflows/opencode-review-finalizer.yml) на `workflow_run` читает задание agent и gate-артефакт с PR/head. Без модели и без `OPENCODE_API_KEY` он публикует `timeout`, `cancelled`, `infra` и `agent_failed` с SHA и ссылкой на запуск. Успешный ответ агента и решения gate он не дублирует: публикация помечается `run_id` и `run_attempt`.
 - **Preflight и классификация:** до запуска action проверяются допуск gate, head SHA, наличие `OPENCODE_API_KEY` и базовые команды. Сбой preflight или шагов подготовки до агента (checkout, skills, OIDC, git) даёт `infra`, а падение самого шага агента — `agent_failed`. Тайм-аут задания не превращается в `agent_failed`.
 - **Полномочия и секрет:** gate читает PR и Actions без секретов; агент получает `OPENCODE_API_KEY` и OIDC в отдельном задании; итог публикует отдельное задание с правом на комментарии; finalizer не получает секрет модели.
 - **Проверки:** `bash scripts/opencode-review/request-guard.test.sh` (`mise run gate`) и `bash scripts/opencode-review/finalizer.test.sh` (`mise run finalizer`).
-- **Замена старого workflow:** чтобы обойти бюджет было нельзя, [`.github/opencode.yml.pending`](.github/opencode.yml.pending) оставляет общий агент только для обычных issue. Его нужно установить вместо текущего `opencode.yml`.
+- **Обход бюджета:** [`.github/workflows/opencode.yml`](.github/workflows/opencode.yml) запускает общий агент только в обычных issue; PR-комментарии принимает workflow с gate.
 
 ## Автотриаж новых обращений
 

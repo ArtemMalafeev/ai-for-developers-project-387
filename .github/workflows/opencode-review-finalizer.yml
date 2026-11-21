@@ -1,18 +1,13 @@
-# Готовый workflow доверенной публикации аварийных итогов /oc на pull request.
-# GitHub App, которым пушит OpenCode, не имеет права создавать файлы в
-# .github/workflows. Человек должен перенести этот файл в
-# .github/workflows/opencode-review-finalizer.yml и закоммитить его обычными правами.
-#
-# Запускается только после завершения "OpenCode Review Request". Модели не
-# вызывает, секрета OPENCODE_API_KEY не получает, читает задание agent и
-# gate-артефакт с PR/head. Публикует только timeout, cancelled, infra и
-# agent_failed; успешный ответ агента и отказ gate не дублирует.
 name: OpenCode Review Request Finalizer
 
 on:
   workflow_run:
     workflows: ["OpenCode Review Request"]
     types: [completed]
+
+concurrency:
+  group: opencode-review-request-finalizer-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}
+  cancel-in-progress: true
 
 permissions: {}
 

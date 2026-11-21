@@ -173,29 +173,29 @@ write_runs '{"total_count":0,"workflow_runs":[]}'
 FAKE_GH_FAIL_RUNS=1 run_guard
 assert_decision false infra 0 "unreadable Actions history fails closed"
 
-if grep -q 'uses: anomalyco/opencode/github@' "$ROOT/.github/opencode-review-comments.yml.pending"; then
+if grep -q 'uses: anomalyco/opencode/github@' "$ROOT/.github/workflows/opencode-review-comments.yml"; then
   pass "PR comment workflow calls the developer agent"
 else
   fail "PR comment workflow does not call the developer agent"
 fi
-if grep -q 'actions: read' "$ROOT/.github/opencode-review-comments.yml.pending"; then
+if grep -q 'actions: read' "$ROOT/.github/workflows/opencode-review-comments.yml"; then
   pass "gate has actions: read"
 else
   fail "gate is missing actions: read"
 fi
-if grep -q 'name: Gate request' "$ROOT/.github/opencode-review-comments.yml.pending" &&
-  grep -q 'run-name: OpenCode request gate PR #' "$ROOT/.github/opencode-review-comments.yml.pending"; then
+if grep -q 'name: Gate request' "$ROOT/.github/workflows/opencode-review-comments.yml" &&
+  grep -q 'run-name: OpenCode request gate PR #' "$ROOT/.github/workflows/opencode-review-comments.yml"; then
   pass "gate has an explicit run-name and job name"
 else
   fail "gate run-name or job name is missing"
 fi
-if grep -Fq "needs.gate.outputs.admitted == 'true'" "$ROOT/.github/opencode-review-comments.yml.pending"; then
+if grep -Fq "needs.gate.outputs.admitted == 'true'" "$ROOT/.github/workflows/opencode-review-comments.yml"; then
   pass "developer agent starts only after an admitted gate"
 else
   fail "developer agent is not gated on the admission output"
 fi
-if grep -q 'build-mock-event.sh' "$ROOT/.github/opencode-review-comments.yml.pending" &&
-  grep -q 'MOCK_EVENT:' "$ROOT/.github/opencode-review-comments.yml.pending"; then
+if grep -q 'build-mock-event.sh' "$ROOT/.github/workflows/opencode-review-comments.yml" &&
+  grep -q 'MOCK_EVENT:' "$ROOT/.github/workflows/opencode-review-comments.yml"; then
   pass "inline comments are normalized for the developer agent"
 else
   fail "inline comment normalization is missing"
@@ -236,17 +236,17 @@ assert_eq "pull_request_review_comment" "$(printf '%s' "$mock_context" | jq -r .
 assert_eq "40" "$(printf '%s' "$mock_context" | jq -r .payload.issue.number)" "inline event PR number"
 assert_eq "src/file.ts" "$(printf '%s' "$mock_context" | jq -r .payload.comment.path)" "inline event keeps diff context"
 assert_eq "owner" "$(printf '%s' "$mock_context" | jq -r .repo.owner)" "inline event repo owner"
-if grep -q 'run-review.sh' "$ROOT/.github/opencode-review-comments.yml.pending"; then
+if grep -q 'run-review.sh' "$ROOT/.github/workflows/opencode-review-comments.yml"; then
   fail "PR comment workflow still runs the read-only reviewer"
 else
   pass "PR comment workflow does not run the read-only reviewer"
 fi
-if grep -q 'run-review.sh' "$ROOT/.github/opencode-review.yml.pending"; then
+if grep -q 'run-review.sh' "$ROOT/.github/workflows/opencode-review.yml"; then
   pass "independent reviewer stays on pull_request"
 else
   fail "independent reviewer is missing from the pull_request workflow"
 fi
-if grep -q 'write-playwright-manifest.sh' "$ROOT/.github/opencode-review.yml.pending" &&
+if grep -q 'write-playwright-manifest.sh' "$ROOT/.github/workflows/opencode-review.yml" &&
   grep -q 'git rev-parse HEAD' "$ROOT/scripts/opencode-review/write-playwright-manifest.sh"; then
   pass "Playwright artifact includes an actual SHA manifest"
 else
