@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.1](https://github.com/ArtemMalafeev/ai-for-developers-project-387/compare/ai-for-developers-project-387-v1.5.0...ai-for-developers-project-387-v1.5.1) (2026-11-21)
+
+
+### Bug Fixes
+
+* **nodejs-package:** убрать зависание OpenCode на чтении скиллов ([#17](https://github.com/ArtemMalafeev/ai-for-developers-project-387/issues/17)) ([865e6e4](https://github.com/ArtemMalafeev/ai-for-developers-project-387/commit/865e6e48964239635e2450f5fe0c510e57153108))
+
 ## [1.5.0](https://github.com/ArtemMalafeev/ai-for-developers-project-387/compare/ai-for-developers-project-387-v1.4.0...ai-for-developers-project-387-v1.5.0) (2026-11-21)
 
 
