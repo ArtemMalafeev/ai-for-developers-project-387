@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.1](https://github.com/ArtemMalafeev/ai-for-developers-project-387/compare/ai-for-developers-project-387-v1.3.0...ai-for-developers-project-387-v1.3.1) (2026-11-21)
+
+
+### Bug Fixes
+
+* **nodejs-package:** устранить повторные релизы ([#11](https://github.com/ArtemMalafeev/ai-for-developers-project-387/issues/11)) ([45d53f8](https://github.com/ArtemMalafeev/ai-for-developers-project-387/commit/45d53f8de4c27517912092d6690681642b94d87f))
+
 ## [1.3.0](https://github.com/ArtemMalafeev/ai-for-developers-project-387/compare/ai-for-developers-project-387-v1.2.2...ai-for-developers-project-387-v1.3.0) (2026-11-21)
 
 
