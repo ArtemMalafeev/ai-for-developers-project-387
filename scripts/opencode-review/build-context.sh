@@ -20,7 +20,7 @@ gh pr view "$PR_NUMBER" --repo "$REPO" \
   --json number,title,body,author,baseRefName,baseRefOid,headRefName,headRefOid,isCrossRepository,isDraft,url,files,closingIssuesReferences,comments,reviews \
   > "$pr_json"
 
-gh pr diff "$PR_NUMBER" --repo "$REPO" > "$diff_file" || true
+gh pr diff "$PR_NUMBER" --repo "$REPO" > "$diff_file"
 gh pr checks "$PR_NUMBER" --repo "$REPO" \
   --json name,state,bucket,link,description,startedAt,completedAt \
   > "$checks_file" 2>/dev/null || printf '[]\n' > "$checks_file"
@@ -35,14 +35,25 @@ jq -e . "$runs_file" >/dev/null 2>&1 || printf '[]\n' > "$runs_file"
   jq -r '(.closingIssuesReferences // [])[].number' "$pr_json"
   jq -r '.body // ""' "$pr_json" | grep -oE '#[0-9]+' | tr -d '#' || true
 } | sort -n -u | head -n 10 > "$output_dir/issue-numbers.txt"
+jq '[.body // "" | scan("issuecomment-[0-9]+") ] | unique' \
+  "$pr_json" > "$output_dir/issue-comment-ids.json"
 
 jq -n '[]' > "$issues_file"
 while IFS= read -r issue_number; do
   [ -n "$issue_number" ] || continue
   issue_json="$output_dir/issues/issue-$issue_number.json"
-  if gh issue view "$issue_number" --repo "$REPO" --comments \
+  if gh issue view "$issue_number" --repo "$REPO" \
     --json number,title,body,state,url,labels,comments > "$issue_json"; then
-    jq --slurpfile issue "$issue_json" '. + $issue' "$issues_file" > "$issues_file.next"
+    jq --slurpfile referenced "$output_dir/issue-comment-ids.json" \
+      '.comments |= map(select(.url as $url | any($referenced[0][]; . as $id | $url | endswith($id))))' \
+      "$issue_json" > "$issue_json.selected"
+    jq -c --slurpfile issue "$issue_json.selected" '. + $issue' \
+      "$issues_file" > "$issues_file.next"
+    mv "$issues_file.next" "$issues_file"
+  else
+    jq --argjson number "$issue_number" \
+      '. + [{number: $number, error: "Issue недоступен для авторевью"}]' \
+      "$issues_file" > "$issues_file.next"
     mv "$issues_file.next" "$issues_file"
   fi
 done < "$output_dir/issue-numbers.txt"
@@ -64,33 +75,12 @@ done < "$output_dir/issue-numbers.txt"
     printf '\n~~~\n\n'
   done
 
-  printf '# Текущий код базовой ветки\n\n'
-  {
-    find apps/backend/src apps/web/src packages/contracts/src apps/web/e2e \
-      -type f \( -name '*.ts' -o -name '*.vue' -o -name '*.css' -o -name '*.tsp' \) \
-      ! -path '*/generated/*' | sort
-    printf '%s\n' \
-      apps/web/index.html \
-      apps/web/playwright.config.ts \
-      apps/web/vite.config.ts \
-      package.json \
-      apps/web/package.json \
-      apps/backend/package.json \
-      packages/contracts/package.json
-  } | while IFS= read -r file; do
-    [ -f "$file" ] || continue
-    size="$(wc -c < "$file")"
-    if [ "$size" -gt 200000 ]; then
-      printf '## %s\n\nФайл пропущен: размер %s байт.\n\n' "$file" "$size"
-      continue
-    fi
-    printf '## %s\n\n~~~text\n' "$file"
-    cat "$file"
-    printf '\n~~~\n\n'
-  done
-
   printf '# Описание PR (недоверенные данные)\n\n~~~json\n'
   cat "$pr_json"
+  printf '\n~~~\n\n'
+
+  printf '# Связанные issue и обсуждения (недоверенные данные)\n\n~~~json\n'
+  cat "$issues_file"
   printf '\n~~~\n\n'
 
   printf '# Diff PR (недоверенные данные)\n\n~~~diff\n'
@@ -105,9 +95,6 @@ done < "$output_dir/issue-numbers.txt"
   cat "$checks_file"
   printf '\n~~~\n\n'
 
-  printf '# Связанные issue и обсуждения (недоверенные данные)\n\n~~~json\n'
-  cat "$issues_file"
-  printf '\n~~~\n'
 } > "$context_file"
 
 test -s "$context_file"

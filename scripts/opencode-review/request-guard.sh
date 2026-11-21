@@ -68,6 +68,7 @@ if [ -z "$head_sha" ]; then
 fi
 
 head_repository="$(printf '%s' "$pr_json" | jq -r '.head.repo.full_name // empty')"
+head_branch="$(printf '%s' "$pr_json" | jq -r '.head.ref // empty')"
 author_login="$(printf '%s' "$pr_json" | jq -r '.user.login // empty')"
 author_association="$(printf '%s' "$pr_json" | jq -r '.author_association // empty')"
 
@@ -81,6 +82,10 @@ fi
 
 if [ "$head_repository" != "$REPO" ]; then
   deny "untrusted" "0"
+fi
+
+if [ -z "$head_branch" ]; then
+  deny "infra" "0"
 fi
 
 if [ "$trusted_author" != "true" ]; then
@@ -129,6 +134,30 @@ if [ "$RUN_ID" != "local" ] && [ "$RUN_ATTEMPT" -gt 1 ]; then
   done
 fi
 
+# The first admitted request for PR #43 ran before run-name was quoted in YAML.
+# Its title has no PR number, so the normal title filter cannot find it. Count
+# its immutable Actions run while this PR is open; fail closed if history is lost.
+legacy_run_id=44954978888
+if [ "$PR_NUMBER" = "43" ] && [ "$RUN_ID" != "$legacy_run_id" ]; then
+  legacy_attempts="$(printf '%s' "$runs_json" | jq -r --argjson id "$legacy_run_id" \
+    '[.[] | select(.id == $id)][0].run_attempt // empty')"
+  case "$legacy_attempts" in
+    ''|*[!0-9]*) runs_error "старый запуск $legacy_run_id отсутствует в истории" ;;
+  esac
+  for ((attempt = 1; attempt <= legacy_attempts; attempt++)); do
+    rc=0
+    gate_admitted "$legacy_run_id" "$attempt" || rc=$?
+    case "$rc" in
+      0) count=$((count + 1)) ;;
+      1) [ "$attempt" -ne 1 ] || runs_error "не удалось подтвердить первый допущенный запрос" ;;
+      *) runs_error "задание gate для старого запуска $legacy_run_id попытки $attempt" ;;
+    esac
+    if [ "$count" -ge "$MAX_REQUESTS" ]; then
+      deny "limit_exhausted" "$count"
+    fi
+  done
+fi
+
 while IFS=$'\t' read -r run_id run_attempt; do
   [ -n "$run_id" ] || continue
   if [ "$run_id" = "$RUN_ID" ]; then
@@ -149,10 +178,18 @@ while IFS=$'\t' read -r run_id run_attempt; do
       deny "limit_exhausted" "$count"
     fi
   done
-done < <(printf '%s' "$runs_json" | jq -r --arg prefix "$RUN_TITLE_PREFIX" '
+done < <(printf '%s' "$runs_json" | jq -r \
+  --arg prefix "$RUN_TITLE_PREFIX" --arg headBranch "$head_branch" '
   .[]
   | select(.event == "issue_comment" or .event == "pull_request_review_comment")
-  | select((.display_title // "") | startswith($prefix))
+  | select(
+      ((.display_title // "") | startswith($prefix)) or
+      (
+        .event == "pull_request_review_comment" and
+        .head_branch == $headBranch and
+        .display_title == "OpenCode request gate PR"
+      )
+    )
   | [.id, (.run_attempt // 1)]
   | @tsv
 ')

@@ -32,7 +32,7 @@ case "${1:-}" in
       exit 0
     fi
     endpoint="${2:-}"
-    if [ "$endpoint" = "repos/owner/repo/pulls/40" ]; then
+    if [ "$endpoint" = "repos/owner/repo/pulls/${PR_NUMBER:-40}" ]; then
       cat "$FAKE_GH_ROOT/pr.json"
       exit 0
     fi
@@ -68,7 +68,11 @@ write_pr() {
     --arg headRepo "$head_repo" \
     '{
       number: 40,
-      head: {sha: "0123456789abcdef0123456789abcdef01234567", repo: {full_name: $headRepo}},
+      head: {
+        ref: "opencode/issue25-20261121213810",
+        sha: "0123456789abcdef0123456789abcdef01234567",
+        repo: {full_name: $headRepo}
+      },
       user: {login: "artem"},
       author_association: $association,
       draft: false,
@@ -100,7 +104,7 @@ run_guard() {
   GITHUB_WORKFLOW_REF="owner/repo/.github/workflows/opencode-review-comments.yml@refs/heads/main" \
   MAX_REQUESTS=3 \
   REPO=owner/repo \
-  PR_NUMBER=40 \
+  PR_NUMBER="${PR_NUMBER:-40}" \
   GH_TOKEN=dummy \
   FAKE_GH_ROOT="$FAKE_ROOT" \
   FAKE_GH_FAIL_RUNS="${FAKE_GH_FAIL_RUNS:-0}" \
@@ -126,6 +130,53 @@ write_pr OWNER
 write_runs '{"total_count":0,"workflow_runs":[]}'
 run_guard
 assert_decision true admitted 1 "first request is admitted"
+
+write_runs '{"total_count":1,"workflow_runs":[
+  {"id":44954978888,"event":"issue_comment","run_attempt":1,"display_title":"OpenCode request gate PR","conclusion":"success"}
+]}'
+write_jobs 44954978888 1 success
+PR_NUMBER=43 run_guard
+assert_decision true admitted 2 "PR #43 counts the admitted legacy request"
+
+write_runs '{"total_count":2,"workflow_runs":[
+  {"id":44954978888,"event":"issue_comment","run_attempt":1,"display_title":"OpenCode request gate PR","head_branch":"main","conclusion":"success"},
+  {"id":44956524120,"event":"pull_request_review_comment","run_attempt":1,"display_title":"OpenCode request gate PR","head_branch":"opencode/issue25-20261121213810","conclusion":"in_progress"}
+]}'
+write_jobs 44956524120 1 success
+PR_NUMBER=43 run_guard
+assert_decision true admitted 3 "PR #43 counts the legacy inline review request"
+
+write_runs '{"total_count":3,"workflow_runs":[
+  {"id":44954978888,"event":"issue_comment","run_attempt":1,"display_title":"OpenCode request gate PR","head_branch":"main","conclusion":"success"},
+  {"id":44956524120,"event":"pull_request_review_comment","run_attempt":1,"display_title":"OpenCode request gate PR","head_branch":"opencode/issue25-20261121213810","conclusion":"success"},
+  {"id":503,"event":"pull_request_review_comment","run_attempt":1,"display_title":"OpenCode request gate PR","head_branch":"other/pr-branch","conclusion":"success"}
+]}'
+write_jobs 503 1 success
+PR_NUMBER=43 run_guard
+assert_decision true admitted 3 "legacy inline requests from another branch are ignored"
+
+write_runs '{"total_count":3,"workflow_runs":[
+  {"id":44954978888,"event":"issue_comment","run_attempt":1,"display_title":"OpenCode request gate PR","head_branch":"main","conclusion":"success"},
+  {"id":44956524120,"event":"pull_request_review_comment","run_attempt":1,"display_title":"OpenCode request gate PR","head_branch":"opencode/issue25-20261121213810","conclusion":"success"},
+  {"id":504,"event":"pull_request_review_comment","run_attempt":1,"display_title":"OpenCode request gate PR","head_branch":"opencode/issue25-20261121213810","conclusion":"success"}
+]}'
+write_jobs 504 1 success
+PR_NUMBER=43 run_guard
+assert_decision false limit_exhausted 3 "legacy inline requests exhaust the PR #43 budget"
+
+write_runs '{"total_count":3,"workflow_runs":[
+  {"id":44954978888,"event":"issue_comment","run_attempt":1,"display_title":"OpenCode request gate PR","conclusion":"success"},
+  {"id":501,"event":"pull_request_review_comment","run_attempt":1,"display_title":"OpenCode request gate PR #43 attempt 1","conclusion":"success"},
+  {"id":502,"event":"issue_comment","run_attempt":1,"display_title":"OpenCode request gate PR #43 attempt 1","conclusion":"success"}
+]}'
+write_jobs 501 1 success
+write_jobs 502 1 success
+PR_NUMBER=43 run_guard
+assert_decision false limit_exhausted 3 "PR #43 blocks after legacy and two current requests"
+
+write_runs '{"total_count":0,"workflow_runs":[]}'
+PR_NUMBER=43 run_guard
+assert_decision false infra 0 "PR #43 fails closed if the legacy run disappears"
 
 write_runs '{"total_count":2,"workflow_runs":[
   {"id":101,"event":"issue_comment","run_attempt":1,"display_title":"OpenCode request gate PR #40 attempt 1","conclusion":"success"},
@@ -190,7 +241,7 @@ else
   fail "gate is missing actions: read"
 fi
 if grep -q 'name: Gate request' "$ROOT/.github/workflows/opencode-review-comments.yml" &&
-  grep -q 'run-name: OpenCode request gate PR #' "$ROOT/.github/workflows/opencode-review-comments.yml"; then
+  grep -Fq 'run-name: "OpenCode request gate PR #' "$ROOT/.github/workflows/opencode-review-comments.yml"; then
   pass "gate has an explicit run-name and job name"
 else
   fail "gate run-name or job name is missing"
