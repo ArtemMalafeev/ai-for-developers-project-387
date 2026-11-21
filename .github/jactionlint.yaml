@@ -1,0 +1,8 @@
+ignores:
+  - rule: dangerous-triggers
+    file: .github/workflows/opencode.yml
+    reason: >-
+      The issue_comment trigger is required for /oc. The job accepts only owner,
+      member, or collaborator comments, checks out the default branch, and has
+      a read-only repository token plus OIDC for the OpenCode GitHub App.
+    expires: "2027-02-21"
