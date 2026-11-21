@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.0](https://github.com/ArtemMalafeev/ai-for-developers-project-387/compare/ai-for-developers-project-387-v1.5.3...ai-for-developers-project-387-v1.6.0) (2026-11-21)
+
+
+### Features
+
+* **nodejs-package:** добавить автотриаж обращений ([#31](https://github.com/ArtemMalafeev/ai-for-developers-project-387/issues/31)) ([3729190](https://github.com/ArtemMalafeev/ai-for-developers-project-387/commit/3729190dded460cc9d09991e048bc8bbbfeb1397))
+
 ## [1.5.3](https://github.com/ArtemMalafeev/ai-for-developers-project-387/compare/ai-for-developers-project-387-v1.5.2...ai-for-developers-project-387-v1.5.3) (2026-11-21)
 
 
