@@ -17,7 +17,7 @@ issues_file="$output_dir/issues.json"
 context_file="$output_dir/review-input.md"
 
 gh pr view "$PR_NUMBER" --repo "$REPO" \
-  --json number,title,body,author,authorAssociation,baseRefName,baseRefOid,headRefName,headRefOid,isCrossRepository,isDraft,url,files,closingIssuesReferences,comments,reviews \
+  --json number,title,body,author,baseRefName,baseRefOid,headRefName,headRefOid,isCrossRepository,isDraft,url,files,closingIssuesReferences,comments,reviews \
   > "$pr_json"
 
 gh pr diff "$PR_NUMBER" --repo "$REPO" > "$diff_file" || true

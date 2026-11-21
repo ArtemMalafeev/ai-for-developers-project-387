@@ -15,7 +15,8 @@ set -euo pipefail
 
 case "${1:-}" in
   pr)
-    cat "$FAKE_GH_ROOT/pr.json"
+    echo "unexpected gh pr view: use the REST pull request fields" >&2
+    exit 1
     ;;
   api)
     if [ "${2:-}" = "--method" ]; then
@@ -31,6 +32,10 @@ case "${1:-}" in
       exit 0
     fi
     endpoint="${2:-}"
+    if [ "$endpoint" = "repos/owner/repo/pulls/40" ]; then
+      cat "$FAKE_GH_ROOT/pr.json"
+      exit 0
+    fi
     run_id="$(printf '%s' "$endpoint" | sed -E 's#.*/runs/([0-9]+)/attempts/([0-9]+)/jobs.*#\1#')"
     attempt="$(printf '%s' "$endpoint" | sed -E 's#.*/runs/([0-9]+)/attempts/([0-9]+)/jobs.*#\2#')"
     file="$FAKE_GH_ROOT/jobs-$run_id-$attempt.json"
@@ -57,20 +62,17 @@ assert_eq() {
 }
 
 write_pr() {
-  local association="${1:-OWNER}" cross="${2:-false}" head_repo="${3:-owner/repo}"
+  local association="${1:-OWNER}" head_repo="${2:-owner/repo}"
   jq -n \
     --arg association "$association" \
     --arg headRepo "$head_repo" \
-    --argjson cross "$cross" \
     '{
       number: 40,
-      headRefOid: "0123456789abcdef0123456789abcdef01234567",
-      isCrossRepository: $cross,
-      headRepository: {nameWithOwner: $headRepo},
-      author: {login: "artem"},
-      authorAssociation: $association,
-      isDraft: false,
-      url: "https://github.com/owner/repo/pull/40"
+      head: {sha: "0123456789abcdef0123456789abcdef01234567", repo: {full_name: $headRepo}},
+      user: {login: "artem"},
+      author_association: $association,
+      draft: false,
+      html_url: "https://github.com/owner/repo/pull/40"
     }' > "$FAKE_ROOT/pr.json"
 }
 
@@ -167,6 +169,10 @@ write_pr NONE
 write_runs '{"total_count":0,"workflow_runs":[]}'
 run_guard
 assert_decision false untrusted 0 "untrusted PR is rejected without reading history"
+
+write_pr OWNER fork/repo
+run_guard
+assert_decision false untrusted 0 "fork PR is rejected without reading history"
 
 write_pr OWNER
 write_runs '{"total_count":0,"workflow_runs":[]}'

@@ -58,20 +58,18 @@ runs_error() {
   deny "infra" "0"
 }
 
-pr_json="$(gh pr view "$PR_NUMBER" --repo "$REPO" \
-  --json number,headRefOid,isCrossRepository,headRepository,author,authorAssociation,isDraft,url)" \
+pr_json="$(gh api "repos/$REPO/pulls/$PR_NUMBER")" \
   || deny "infra" "0"
-head_sha="$(printf '%s' "$pr_json" | jq -r '.headRefOid // empty')"
+head_sha="$(printf '%s' "$pr_json" | jq -r '.head.sha // empty')"
 emit "head_sha" "$head_sha"
 
 if [ -z "$head_sha" ]; then
   deny "untrusted" "0"
 fi
 
-is_cross_repository="$(printf '%s' "$pr_json" | jq -r '.isCrossRepository')"
-head_repository="$(printf '%s' "$pr_json" | jq -r '.headRepository.nameWithOwner // empty')"
-author_login="$(printf '%s' "$pr_json" | jq -r '.author.login // empty')"
-author_association="$(printf '%s' "$pr_json" | jq -r '.authorAssociation // empty')"
+head_repository="$(printf '%s' "$pr_json" | jq -r '.head.repo.full_name // empty')"
+author_login="$(printf '%s' "$pr_json" | jq -r '.user.login // empty')"
+author_association="$(printf '%s' "$pr_json" | jq -r '.author_association // empty')"
 
 trusted_author=false
 case "$author_association" in
@@ -81,7 +79,7 @@ if [ "$author_login" = "opencode-agent[bot]" ]; then
   trusted_author=true
 fi
 
-if [ "$is_cross_repository" != "false" ] || [ "$head_repository" != "$REPO" ]; then
+if [ "$head_repository" != "$REPO" ]; then
   deny "untrusted" "0"
 fi
 
