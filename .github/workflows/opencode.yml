@@ -29,10 +29,27 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
 
+      - name: Checkout agent skills
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: mattpocock/skills
+          ref: 4ae2317ddb22b046e26455e4f9c9b3aaaf62212d # v1.3.2
+          path: .agent-skill-source
+          persist-credentials: false
+
+      - name: Make agent skills available
+        run: |
+          mkdir -p "$HOME/.config/opencode/skills"
+          cp -R .agent-skill-source/skills/engineering/. "$HOME/.config/opencode/skills/"
+          cp -R .agent-skill-source/skills/productivity/. "$HOME/.config/opencode/skills/"
+          test "$(find "$HOME/.config/opencode/skills" -name SKILL.md | wc -l | tr -d ' ')" = 27
+          rm -rf .agent-skill-source
+
       - name: Run OpenCode
         uses: anomalyco/opencode/github@17b79f4e0c16dcff200b0417567ed22aeb2d7166 # github-v1.2.28
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
         with:
           model: opencode/deepseek-v4.1-flash
+          mentions: /opencode,/oc
           share: false
