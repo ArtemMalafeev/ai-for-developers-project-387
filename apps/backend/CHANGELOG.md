@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/ArtemMalafeev/ai-for-developers-project-387/compare/apps-api-v1.1.0...apps-api-v1.2.0) (2026-11-21)
+
+
+### Features
+
+* **nodejs-package:** перенести исходные файлы проекта 386 ([#1](https://github.com/ArtemMalafeev/ai-for-developers-project-387/issues/1)) ([abbfa68](https://github.com/ArtemMalafeev/ai-for-developers-project-387/commit/abbfa681b004df1353b59956c47394eb0126fb26))
+
 ## [1.1.0](https://github.com/ArtemMalafeev/ai-for-developers-project-386/compare/apps-api-v1.0.0...apps-api-v1.1.0) (2026-11-11)
 
 
