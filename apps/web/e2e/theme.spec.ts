@@ -245,7 +245,7 @@ test('светлая тема сохраняет исходную палитру
   ).toBeVisible()
 
   const colors = await page.evaluate(() => {
-    const read = (selector: string, property: 'backgroundColor' | 'color') =>
+    const read = (selector: string, property: 'backgroundColor' | 'color' | 'borderTopColor') =>
       getComputedStyle(document.querySelector(selector)!)[property]
     return {
       body: read('body', 'backgroundColor'),
@@ -255,6 +255,8 @@ test('светлая тема сохраняет исходную палитру
       rolesSection: read('.roles-section', 'backgroundColor'),
       footer: read('.site-footer', 'backgroundColor'),
       footerText: read('.footer-inner', 'color'),
+      heroCardBorder: read('.hero-card', 'borderTopColor'),
+      scheduleRowBorder: read('.schedule-row:not(.schedule-row-active)', 'borderTopColor'),
     }
   })
 
@@ -271,4 +273,32 @@ test('светлая тема сохраняет исходную палитру
   expect(channels(colors.rolesSection)).toEqual([255, 255, 255])
   expect(channels(colors.footer)).toEqual([255, 255, 255])
   expect(channels(colors.footerText)).toEqual([156, 163, 175])
+  expect(channels(colors.heroCardBorder)).toEqual([227, 230, 235])
+  expect(channels(colors.scheduleRowBorder)).toEqual([238, 240, 243])
+})
+
+test('тёмная тема задаёт собственные границы карточки и расписания', async ({ page }) => {
+  await page.addInitScript((key) => localStorage.setItem(key, 'dark'), THEME_STORAGE_KEY)
+  await page.goto('/')
+  await expect(
+    page.getByRole('heading', { name: 'Запись на звонок без лишних переписок' }),
+  ).toBeVisible()
+
+  const borders = await page.evaluate(() => {
+    const read = (selector: string) =>
+      getComputedStyle(document.querySelector(selector)!).borderTopColor
+    return {
+      heroCard: read('.hero-card'),
+      scheduleRow: read('.schedule-row:not(.schedule-row-active)'),
+    }
+  })
+
+  const channels = (value: string) =>
+    value
+      .match(/[\d.]+/g)
+      ?.slice(0, 3)
+      .map(Number) ?? []
+
+  expect(channels(borders.heroCard)).toEqual([38, 52, 73])
+  expect(channels(borders.scheduleRow)).toEqual([30, 41, 59])
 })

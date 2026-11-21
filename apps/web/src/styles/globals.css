@@ -62,6 +62,8 @@
   --app-border-subtle: #e8eaee;
   --app-border-strong: #cbd5e1;
   --app-border-soft: #e2e8f0;
+  --app-hero-card-border: #e3e6eb;
+  --app-schedule-row-border: #eef0f3;
   --app-nav-hover: #e9ebef;
   --app-brand: #2563eb;
   --app-brand-strong: #1d4ed8;
@@ -147,6 +149,8 @@
   --app-border-subtle: #1e293b;
   --app-border-strong: #475569;
   --app-border-soft: #334155;
+  --app-hero-card-border: #263449;
+  --app-schedule-row-border: #1e293b;
   --app-nav-hover: #1e293b;
   --app-brand: #60a5fa;
   --app-brand-strong: #93c5fd;
