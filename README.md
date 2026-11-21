@@ -162,6 +162,21 @@ docker run --rm -p 3000:3000 -e PORT=3000 calendar-calls
 
 Проверки запускаются на каждый коммит workflow [`.github/workflows/hexlet-check.yml`](.github/workflows/hexlet-check.yml). Не удаляйте и не переименовывайте этот файл и репозиторий.
 
+## OpenCode в GitHub
+
+В репозитории подключён OpenCode GitHub App, а сценарий работы описан в workflow [`.github/workflows/opencode.yml`](.github/workflows/opencode.yml). Агент запускается по событиям `issue_comment` и `pull_request_review_comment` с `types: [created]`.
+
+- **Команды:** `/opencode` и `/oc` в комментарии.
+- **Авторы:** только участники с ролью `OWNER`, `MEMBER` или `COLLABORATOR`; комментарии ботов пропускаются.
+- **Модель:** `opencode/deepseek-v4.1-flash`.
+- **Доступ:** секрет `OPENCODE_API_KEY` и OIDC-токен для OpenCode GitHub App.
+- **Публикация:** `share: false` — сессия не публикуется по внешней ссылке.
+- **Ограничения:** тайм-аут 30 минут; для одного issue или PR одновременно выполняется только один запуск.
+
+Workflow проверяет команду и роль автора, берёт код из ветки по умолчанию и устанавливает на раннер 27 стабильных скиллов [`mattpocock/skills`](https://github.com/mattpocock/skills) версии 1.3.2. Настройки трекера задач, меток triage и доменных документов агент читает из `docs/agents/`.
+
+Агент отвечает на запрос комментарием в issue или PR, а ход выполнения и логи видны в [GitHub Actions](https://github.com/ArtemMalafeev/ai-for-developers-project-387/actions/workflows/opencode.yml).
+
 ## Сценарий использования
 
 1. **Владелец создаёт тип встречи.** На странице `/admin` он указывает название, описание и длительность, например «Совещание», 30 минут.
