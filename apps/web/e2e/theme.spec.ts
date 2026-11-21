@@ -114,3 +114,57 @@ test('сохранённая тёмная тема применяется до �
     'dark',
   )
 })
+
+test('админка целиком работает в тёмной теме', async ({ page, request }) => {
+  const meetingTypeName = `Тёмная админка ${Date.now()}`
+  const createdType = await request.post('/api/owner/meeting-types', {
+    data: { name: meetingTypeName, durationMinutes: 30 },
+  })
+  expect(createdType.ok()).toBe(true)
+  const meetingType = (await createdType.json()) as { id: string }
+
+  const slotsResponse = await request.get(`/api/meeting-types/${meetingType.id}/slots`)
+  expect(slotsResponse.ok()).toBe(true)
+  const slots = (await slotsResponse.json()) as Array<{ startAt: string }>
+  const firstSlot = slots[0]
+  if (!firstSlot) throw new Error('Не найдены слоты для проверки админки')
+
+  const bookingResponse = await request.post('/api/bookings', {
+    data: {
+      meetingTypeId: meetingType.id,
+      startAt: firstSlot.startAt,
+      guestName: 'Тёмный гость админки',
+      guestEmail: 'dark-admin@example.com',
+    },
+    headers: { 'Idempotency-Key': `e2e-dark-admin-${Date.now()}` },
+  })
+  expect(bookingResponse.ok()).toBe(true)
+
+  await page.addInitScript((key) => localStorage.setItem(key, 'dark'), THEME_STORAGE_KEY)
+  await page.goto('/admin')
+  await expect(page.getByRole('heading', { name: 'Рабочая панель' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: meetingTypeName })).toBeVisible()
+  await expect(page.getByRole('table').getByText('dark-admin@example.com')).toBeVisible()
+
+  const newTypeName = `Тёмный формат ${Date.now()}`
+  await page.getByLabel('Название').fill(newTypeName)
+  await page.getByLabel('Длительность, минут').fill('45')
+  await page.getByRole('button', { name: 'Создать тип встречи' }).click()
+  await expect(page.getByRole('heading', { name: newTypeName })).toBeVisible()
+
+  const backgrounds = await page.evaluate(() =>
+    ['.site-header', '.page-shell', '.admin-type-item', '.bookings-card', '[data-slot="card"]']
+      .map((selector) => document.querySelector(selector))
+      .filter((element): element is Element => element !== null)
+      .map((element) => getComputedStyle(element).backgroundColor),
+  )
+  expect(backgrounds.length).toBeGreaterThan(0)
+  for (const color of backgrounds) {
+    const channels =
+      color
+        .match(/[\d.]+/g)
+        ?.slice(0, 3)
+        .map(Number) ?? []
+    expect(Math.max(...channels)).toBeLessThan(90)
+  }
+})
