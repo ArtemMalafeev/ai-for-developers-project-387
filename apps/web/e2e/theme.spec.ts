@@ -168,3 +168,115 @@ test('админка целиком работает в тёмной теме', 
     expect(Math.max(...channels)).toBeLessThan(90)
   }
 })
+
+test('шапка с переключателем не ломается на 320 и 375 px', async ({ page }) => {
+  for (const width of [320, 375]) {
+    await page.setViewportSize({ width, height: 800 })
+    await page.goto('/booking')
+    await expect(page.getByRole('heading', { name: 'Запись на звонок' })).toBeVisible()
+    await expect(page.getByRole('button', { name: /Включить (тёмную|светлую) тему/ })).toBeVisible()
+
+    const metrics = await page.evaluate(() => ({
+      scrollWidth: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+    }))
+    expect(metrics.scrollWidth).toBeLessThanOrEqual(metrics.clientWidth)
+
+    const html = page.locator('html')
+    const wasDark = await html.evaluate((element) => element.classList.contains('dark'))
+    const toggle = page.getByRole('button', { name: /Включить (тёмную|светлую) тему/ })
+    await toggle.click()
+    if (wasDark) {
+      await expect(html).not.toHaveClass(/dark/)
+    } else {
+      await expect(html).toHaveClass(/dark/)
+    }
+  }
+})
+
+test('фокус виден в светлой и тёмной темах', async ({ page }) => {
+  await page.goto('/booking')
+  const html = page.locator('html')
+
+  let focused = false
+  for (let index = 0; index < 6; index += 1) {
+    await page.keyboard.press('Tab')
+    focused = await page.evaluate(
+      () => document.activeElement?.getAttribute('aria-label')?.includes('тему') ?? false,
+    )
+    if (focused) break
+  }
+  expect(focused).toBe(true)
+
+  const focusStyle = () =>
+    page.evaluate(() => {
+      const element = document.activeElement
+      if (!element) throw new Error('Нет элемента в фокусе')
+      const style = getComputedStyle(element)
+      return {
+        outlineStyle: style.outlineStyle,
+        outlineWidth: style.outlineWidth,
+        outlineColor: style.outlineColor,
+      }
+    })
+
+  const lightFocus = await focusStyle()
+  expect(lightFocus.outlineStyle).toBe('solid')
+  expect(Number.parseFloat(lightFocus.outlineWidth)).toBeGreaterThanOrEqual(2)
+
+  await page.keyboard.press('Space')
+  await expect(html).toHaveClass(/dark/)
+
+  const darkFocus = await focusStyle()
+  expect(darkFocus.outlineStyle).toBe('solid')
+  expect(Number.parseFloat(darkFocus.outlineWidth)).toBeGreaterThanOrEqual(2)
+})
+
+test('переходы отключаются при prefers-reduced-motion', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await page.goto('/booking')
+
+  const durations = await page.evaluate(() =>
+    ['body', '.site-header', '.nav-link', '.theme-toggle', '[data-slot="card"]'].map(
+      (selector) => getComputedStyle(document.querySelector(selector)!).transitionDuration,
+    ),
+  )
+  for (const duration of durations) {
+    expect(duration.split(',').every((value) => value.trim() === '0s')).toBe(true)
+  }
+})
+
+test('светлая тема сохраняет исходную палитру', async ({ page }) => {
+  await page.goto('/')
+  await expect(
+    page.getByRole('heading', { name: 'Запись на звонок без лишних переписок' }),
+  ).toBeVisible()
+
+  const colors = await page.evaluate(() => {
+    const read = (selector: string, property: 'backgroundColor' | 'color') =>
+      getComputedStyle(document.querySelector(selector)!)[property]
+    return {
+      body: read('body', 'backgroundColor'),
+      brand: read('.brand', 'color'),
+      navLink: read('.nav-link', 'color'),
+      primaryButton: read('.button-primary', 'backgroundColor'),
+      rolesSection: read('.roles-section', 'backgroundColor'),
+      footer: read('.site-footer', 'backgroundColor'),
+      footerText: read('.footer-inner', 'color'),
+    }
+  })
+
+  const channels = (value: string) =>
+    value
+      .match(/[\d.]+/g)
+      ?.slice(0, 3)
+      .map(Number) ?? []
+
+  expect(channels(colors.body)).toEqual([245, 246, 248])
+  expect(channels(colors.brand)).toEqual([17, 24, 39])
+  expect(channels(colors.navLink)).toEqual([107, 114, 128])
+  expect(channels(colors.primaryButton)).toEqual([37, 99, 235])
+  expect(channels(colors.rolesSection)).toEqual([255, 255, 255])
+  expect(channels(colors.footer)).toEqual([255, 255, 255])
+  expect(channels(colors.footerText)).toEqual([156, 163, 175])
+})

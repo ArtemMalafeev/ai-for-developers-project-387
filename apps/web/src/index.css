@@ -70,6 +70,14 @@ body,
     scroll-behavior: auto;
   }
 
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0s !important;
+    animation-duration: 0s !important;
+    animation-iteration-count: 1 !important;
+  }
+
   body,
   .site-header,
   .site-footer,
