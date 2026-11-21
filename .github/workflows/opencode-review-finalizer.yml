@@ -1,0 +1,54 @@
+name: OpenCode Review Request Finalizer
+
+on:
+  workflow_run:
+    workflows: ["OpenCode Review Request"]
+    types: [completed]
+
+concurrency:
+  group: opencode-review-request-finalizer-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  finalize:
+    if: >-
+      github.event.workflow_run.event == 'issue_comment' ||
+      github.event.workflow_run.event == 'pull_request_review_comment'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: write
+    steps:
+      - name: Checkout trusted default branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Download gate artifact
+        continue-on-error: true
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: opencode-request-gate-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}
+          path: .opencode-request/gate
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Publish abnormal result
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          DISPLAY_TITLE: ${{ github.event.workflow_run.display_title }}
+          ARTIFACT_DIR: .opencode-request/gate
+          OUTPUT_PATH: .opencode-request/comment.md
+          LIMIT: "3"
+          AGENT_TIMEOUT_MINUTES: "30"
+        run: bash scripts/opencode-review/finalize-request.sh

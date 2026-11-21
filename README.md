@@ -164,18 +164,50 @@ docker run --rm -p 3000:3000 -e PORT=3000 calendar-calls
 
 ## OpenCode в GitHub
 
-В репозитории подключён OpenCode GitHub App, а сценарий работы описан в workflow [`.github/workflows/opencode.yml`](.github/workflows/opencode.yml). Агент запускается по событиям `issue_comment` и `pull_request_review_comment` с `types: [created]`.
+В репозитории подключён OpenCode GitHub App. События комментариев и pull request разделены: `/oc` в обычном issue запускает агента [`.github/workflows/opencode.yml`](.github/workflows/opencode.yml), автоматическое ревью PR запускается отдельным workflow, а `/oc` в комментарии к PR проходит через отдельный workflow с бюджетом запросов.
 
-- **Команды:** `/opencode` и `/oc` в комментарии.
+### Установленные workflow
+
+Авторевью, обработка команд в PR и финализатор находятся в `.github/workflows`. GitHub App не может изменять эту директорию; обновления workflow вносит владелец репозитория обычными правами. Перед изменением проверяйте `mise run actions`, а после публикации — фактические прогоны на PR.
+
+### Команды в issue
+
+- **Команды:** `/opencode` и `/oc` в комментарии к issue.
 - **Авторы:** только участники с ролью `OWNER`, `MEMBER` или `COLLABORATOR`; комментарии ботов пропускаются.
 - **Модель:** `opencode/deepseek-v4.1-flash`.
 - **Доступ:** секрет `OPENCODE_API_KEY` и OIDC-токен для OpenCode GitHub App.
 - **Публикация:** `share: false` — сессия не публикуется по внешней ссылке.
-- **Ограничения:** тайм-аут 30 минут; для одного issue или PR одновременно выполняется только один запуск.
+- **Ограничения:** тайм-аут 30 минут; для одного issue одновременно выполняется только один запуск.
 
-Workflow проверяет команду и роль автора, берёт код из ветки по умолчанию и устанавливает на раннер 27 стабильных скиллов [`mattpocock/skills`](https://github.com/mattpocock/skills) версии 1.3.2. Настройки трекера задач, меток triage и доменных документов агент читает из `docs/agents/`.
+Агент проверяет команду и роль автора, берёт код из ветки по умолчанию и устанавливает на раннер 27 стабильных скиллов [`mattpocock/skills`](https://github.com/mattpocock/skills) версии 1.3.2. Настройки трекера задач, меток triage и доменных документов агент читает из `docs/agents/`. Ответ и логи видны в [GitHub Actions](https://github.com/ArtemMalafeev/ai-for-developers-project-387/actions/workflows/opencode.yml).
 
-Агент отвечает на запрос комментарием в issue или PR, а ход выполнения и логи видны в [GitHub Actions](https://github.com/ArtemMalafeev/ai-for-developers-project-387/actions/workflows/opencode.yml).
+### Авторевью pull request
+
+[`.github/workflows/opencode-review.yml`](.github/workflows/opencode-review.yml) открытые и обновлённые PR проверяет независимый ревьюер через обычный OpenCode CLI.
+
+- **События:** только `pull_request` (`opened`, `synchronize`, `reopened`, `ready_for_review`); комментарии и PR не смешиваются в одном запуске.
+- **Допуск:** только PR из веток этого репозитория от `OWNER`, `MEMBER`, `COLLABORATOR` или конкретного бота `opencode-agent[bot]`. Fork и черновики пропускаются. Используется `pull_request`, а не `pull_request_target`, поэтому fork-запуски не получают секреты.
+- **Доверенные инструкции:** ревьюер читает `REVIEW.md`, `AGENTS.md`, глоссарий и ADR из ветки по умолчанию. Описание PR, diff, issue и логи передаются как недоверенные данные; инструкции из них не выполняются.
+- **Безопасность:** у ревьюера отключены shell, запись файлов, сеть, задачи и скиллы. Он читает только подготовленный `review-input.md`, не получает `GH_TOKEN` и не может изменить код.
+- **Публикация:** отчёт публикуется отдельным заданием с правом `pull-requests: write`, только если head PR не изменился. Итог содержит причину, проверенный SHA и ссылку на логи/артефакты.
+- **Итоги:** `success`, `timeout`, `infra`, `agent_failed`, `cancelled` и `stale` публикуются отдельно; частичный отчёт при ошибке не выдаётся за ревью.
+- **Обновления:** для одного PR отменяется устаревший запуск (`cancel-in-progress: true`), тайм-аут задания 25 минут, запуск модели ограничен 20 минутами.
+- **Браузерная проверка:** отдельное задание Playwright проверяет точный `head.sha` и запускает `playwright test --trace on`. Артефакт содержит trace, HTML-отчёт и `manifest.json` с фактическим `git rev-parse HEAD`, ожидаемым SHA и результатом теста.
+
+Критерии ревью для календаря, записи на звонок и ручной тёмной темы #25 находятся в [`REVIEW.md`](REVIEW.md). Шаблон [`.github/pull_request_template.md`](.github/pull_request_template.md) требует ссылки на обращение и согласование, спецификацию и тикеты, команды и результаты проверок, ссылки на CI, проверенный SHA, риск по последствиям ошибки и способ отката.
+
+### Ручные запросы /oc на pull request
+
+[`.github/workflows/opencode-review-comments.yml`](.github/workflows/opencode-review-comments.yml) запросы `/oc` и `/opencode` в `issue_comment` и `pull_request_review_comment` на PR проходят отдельный gate, а затем запускают прежний агент `anomalyco/opencode/github`. Человек может попросить исправить код в общем комментарии или в построчном комментарии к diff.
+
+- **Бюджет:** не более трёх допущенных запусков на один PR. Попытки считаются по истории GitHub Actions (`actions: read`) через явный `run-name` и результат задания `Gate request`, а не по комментарию PR, который токен GitHub App разработчика может переписать.
+- **Учёт:** каждый `run_attempt`, включая Re-run, а также отмена и тайм-аут после допуска, расходует попытку. Четвёртый запрос блокируется до вызова модели.
+- **Итоги gate:** `limit_exhausted` и `untrusted` публикует summary внутри workflow, при `limit_exhausted` модель не вызывается.
+- **Аварийные итоги:** после завершения workflow отдельный trusted [`opencode-review-finalizer.yml`](.github/workflows/opencode-review-finalizer.yml) на `workflow_run` читает задание agent и gate-артефакт с PR/head. Без модели и без `OPENCODE_API_KEY` он публикует `timeout`, `cancelled`, `infra` и `agent_failed` с SHA и ссылкой на запуск. Успешный ответ агента и решения gate он не дублирует: публикация помечается `run_id` и `run_attempt`.
+- **Preflight и классификация:** до запуска action проверяются допуск gate, head SHA, наличие `OPENCODE_API_KEY` и базовые команды. Сбой preflight или шагов подготовки до агента (checkout, skills, OIDC, git) даёт `infra`, а падение самого шага агента — `agent_failed`. Тайм-аут задания не превращается в `agent_failed`.
+- **Полномочия и секрет:** gate читает PR и Actions без секретов; агент получает `OPENCODE_API_KEY` и OIDC в отдельном задании; итог публикует отдельное задание с правом на комментарии; finalizer не получает секрет модели.
+- **Проверки:** `bash scripts/opencode-review/request-guard.test.sh` (`mise run gate`) и `bash scripts/opencode-review/finalizer.test.sh` (`mise run finalizer`).
+- **Обход бюджета:** [`.github/workflows/opencode.yml`](.github/workflows/opencode.yml) запускает общий агент только в обычных issue; PR-комментарии принимает workflow с gate.
 
 ## Автотриаж новых обращений
 

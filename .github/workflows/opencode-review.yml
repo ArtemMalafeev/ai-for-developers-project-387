@@ -1,0 +1,241 @@
+name: OpenCode Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: opencode-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  review:
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association) ||
+        (github.event.pull_request.user.login == 'opencode-agent[bot]' && github.event.pull_request.user.type == 'Bot')
+      )
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+      checks: read
+      actions: read
+      statuses: read
+    steps:
+      - name: Checkout trusted default branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Install OpenCode CLI
+        env:
+          OPENCODE_VERSION: 1.19.6
+          OPENCODE_SHA256: 47734e08968b30cc22a0bffb6d9feeed76ad4aa743213a12122040392d09a057
+        run: |
+          set -euo pipefail
+          archive=/tmp/opencode-linux-x64.tar.gz
+          mkdir -p "$HOME/.opencode/bin"
+          curl -fsSL --retry 3 -o "$archive" \
+            "https://github.com/anomalyco/opencode/releases/download/v${OPENCODE_VERSION}/opencode-linux-x64.tar.gz"
+          printf '%s  %s\n' "$OPENCODE_SHA256" "$archive" | sha256sum -c -
+          tar -xzf "$archive" -C "$HOME/.opencode/bin" opencode
+          chmod +x "$HOME/.opencode/bin/opencode"
+          echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
+
+      - name: Build review context
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          OUTPUT_DIR: .review-context
+        run: bash scripts/opencode-review/build-context.sh
+
+      - name: Run independent review
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          OPENCODE_CONFIG_CONTENT: |-
+            {
+              "permission": {
+                "*": "deny",
+                "bash": "deny",
+                "edit": "deny",
+                "webfetch": "deny",
+                "websearch": "deny",
+                "task": "deny",
+                "skill": "deny",
+                "question": "deny",
+                "todowrite": "deny",
+                "doom_loop": "deny",
+                "external_directory": {
+                  "*": "deny"
+                },
+                "read": {
+                  "*": "deny",
+                  ".review-context/review-input.md": "allow",
+                  "**/.review-context/review-input.md": "allow"
+                }
+              }
+            }
+          RESULT_PATH: .review-context/result.json
+          REVIEW_PATH: .review-context/review.md
+          LOG_PATH: .review-context/opencode.log
+          PROMPT_FILE: scripts/opencode-review/prompt.md
+          CONTEXT_FILE: .review-context/review-input.md
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TIMEOUT_SECONDS: "1200"
+        run: bash scripts/opencode-review/run-review.sh
+
+      - name: Upload review result
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: opencode-review-${{ github.event.pull_request.head.sha }}
+          path: |
+            .review-context/result.json
+            .review-context/review.md
+            .review-context/opencode.log
+          if-no-files-found: warn
+          retention-days: 7
+
+  playwright:
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association) ||
+        (github.event.pull_request.user.login == 'opencode-agent[bot]' && github.event.pull_request.user.type == 'Bot')
+      )
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact head SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Verify exact head SHA
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+
+      - name: Set up mise
+        uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a # v5
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium headless shell
+        run: pnpm --filter apps-web exec playwright install --only-shell chromium
+
+      - name: Run Playwright with trace
+        id: playwright
+        run: pnpm --filter apps-web exec playwright test --trace on
+
+      - name: Write Playwright manifest
+        if: always()
+        env:
+          OUTPUT_PATH: apps/web/test-results/manifest.json
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+          TEST_OUTCOME: ${{ steps.playwright.outcome }}
+          TEST_CONCLUSION: ${{ steps.playwright.conclusion }}
+          JOB_STATUS: ${{ job.status }}
+          TEST_COMMAND: pnpm --filter apps-web exec playwright test --trace on
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: bash scripts/opencode-review/write-playwright-manifest.sh
+
+      - name: Upload Playwright trace, report and manifest
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: playwright-trace-${{ github.event.pull_request.head.sha }}
+          path: |
+            apps/web/test-results/
+            apps/web/playwright-report/
+          if-no-files-found: warn
+          retention-days: 7
+
+  summary:
+    if: >-
+      always() &&
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association) ||
+        (github.event.pull_request.user.login == 'opencode-agent[bot]' && github.event.pull_request.user.type == 'Bot')
+      )
+    needs: [review, playwright]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Checkout trusted default branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Download review result
+        continue-on-error: true
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: opencode-review-${{ github.event.pull_request.head.sha }}
+          path: .review-context
+
+      - name: Publish result
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          BROWSER_RESULT: ${{ needs.playwright.result }}
+        run: |
+          set -euo pipefail
+          current_head="$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefOid --jq .headRefOid)"
+          if [ "$current_head" != "$HEAD_SHA" ]; then
+            echo "PR head changed; skipping stale review"
+            exit 0
+          fi
+
+          reason=infra
+          reviewed_sha="$HEAD_SHA"
+          if [ -f .review-context/result.json ]; then
+            reason="$(jq -r '.reason // "infra"' .review-context/result.json)"
+            reviewed_sha="$(jq -r '.sha // empty' .review-context/result.json)"
+            reviewed_sha="${reviewed_sha:-$HEAD_SHA}"
+          else
+            case "${{ needs.review.result }}" in
+              cancelled) reason=cancelled ;;
+              *) reason=infra ;;
+            esac
+          fi
+          if [ "$reason" = success ] && [ ! -s .review-context/review.md ]; then
+            reason=agent_failed
+          fi
+          if [ "$reviewed_sha" != "$HEAD_SHA" ]; then
+            reason=stale
+          fi
+
+          REASON="$reason" \
+          HEAD_SHA="$reviewed_sha" \
+          RUN_URL="$RUN_URL" \
+          REVIEW_PATH=".review-context/review.md" \
+          BROWSER_RESULT="$BROWSER_RESULT" \
+          OUTPUT_PATH=.review-context/comment.md \
+            bash scripts/opencode-review/publish-result.sh
+
+          gh pr comment "$PR_NUMBER" --repo "$REPO" --body-file .review-context/comment.md
