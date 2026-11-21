@@ -15,6 +15,7 @@
     "module": "preserve",
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
+    "lib": ["ES2023", "DOM"],
 
     // Include Node.js types and avoid accidentally including other `@types/*` packages.
     "types": ["node"],

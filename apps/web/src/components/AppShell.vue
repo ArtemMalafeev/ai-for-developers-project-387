@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { CalendarDays } from '@lucide/vue'
 import { RouterLink } from 'vue-router'
+
+import ThemeToggle from '@/components/ThemeToggle.vue'
 </script>
 
 <template>
@@ -14,10 +16,13 @@ import { RouterLink } from 'vue-router'
           <span>Запись на звонок</span>
         </RouterLink>
 
-        <nav class="main-nav" aria-label="Основная навигация">
-          <RouterLink class="nav-link" to="/booking">Записаться</RouterLink>
-          <RouterLink class="nav-link nav-link-accent" to="/admin">Админка</RouterLink>
-        </nav>
+        <div class="header-actions">
+          <nav class="main-nav" aria-label="Основная навигация">
+            <RouterLink class="nav-link" to="/booking">Записаться</RouterLink>
+            <RouterLink class="nav-link nav-link-accent" to="/admin">Админка</RouterLink>
+          </nav>
+          <ThemeToggle />
+        </div>
       </div>
     </header>
 
