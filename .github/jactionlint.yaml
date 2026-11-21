@@ -15,3 +15,13 @@ ignores:
       from Actions history without secrets, and the developer agent runs in a
       separate job with the API key and OIDC.
     expires: "2027-02-21"
+  - rule: dangerous-triggers
+    file: .github/workflows/opencode-review-finalizer.yml
+    reason: >-
+      workflow_run is required to publish abnormal /oc outcomes after the
+      request workflow has finished, including manual cancellation that skips
+      the in-workflow summary. The finalizer checks out the trusted default
+      branch, receives no model secret, reads only the gate artifact and job
+      conclusions, and publishes only timeout, cancelled, infra and
+      agent_failed.
+    expires: "2027-02-21"

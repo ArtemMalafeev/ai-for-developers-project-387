@@ -173,6 +173,7 @@ GitHub App, которым пушит OpenCode, не имеет права со�
 ```bash
 mv .github/opencode-review.yml.pending .github/workflows/opencode-review.yml
 mv .github/opencode-review-comments.yml.pending .github/workflows/opencode-review-comments.yml
+mv .github/opencode-review-finalizer.yml.pending .github/workflows/opencode-review-finalizer.yml
 cp .github/opencode.yml.pending .github/workflows/opencode.yml
 ```
 
@@ -210,9 +211,11 @@ cp .github/opencode.yml.pending .github/workflows/opencode.yml
 
 - **Бюджет:** не более трёх допущенных запусков на один PR. Попытки считаются по истории GitHub Actions (`actions: read`) через явный `run-name` и результат задания `Gate request`, а не по комментарию PR, который токен GitHub App разработчика может переписать.
 - **Учёт:** каждый `run_attempt`, включая Re-run, а также отмена и тайм-аут после допуска, расходует попытку. Четвёртый запрос блокируется до вызова модели.
-- **Итоги:** `limit_exhausted`, `timeout`, `infra`, `agent_failed` и `untrusted` публикуются отдельным комментарием с причиной, SHA и ссылкой на логи. При `limit_exhausted` модель не вызывается.
-- **Полномочия и секрет:** gate читает PR и Actions без секретов; агент получает `OPENCODE_API_KEY` и OIDC в отдельном задании; итог публикует отдельное задание с правом на комментарии.
-- **Проверка gate:** `bash scripts/opencode-review/request-guard.test.sh` или `mise run gate`.
+- **Итоги gate:** `limit_exhausted` и `untrusted` публикует summary внутри workflow, при `limit_exhausted` модель не вызывается.
+- **Аварийные итоги:** после завершения workflow отдельный trusted [`opencode-review-finalizer.yml.pending`](.github/opencode-review-finalizer.yml.pending) на `workflow_run` читает задание agent и gate-артефакт с PR/head. Без модели и без `OPENCODE_API_KEY` он публикует `timeout`, `cancelled`, `infra` и `agent_failed` с SHA и ссылкой на запуск. Успешный ответ агента и решения gate он не дублирует: публикация помечается `run_id` и `run_attempt`.
+- **Preflight и классификация:** до запуска action проверяются допуск gate, head SHA, наличие `OPENCODE_API_KEY` и базовые команды. Сбой preflight или шагов подготовки до агента (checkout, skills, OIDC, git) даёт `infra`, а падение самого шага агента — `agent_failed`. Тайм-аут задания не превращается в `agent_failed`.
+- **Полномочия и секрет:** gate читает PR и Actions без секретов; агент получает `OPENCODE_API_KEY` и OIDC в отдельном задании; итог публикует отдельное задание с правом на комментарии; finalizer не получает секрет модели.
+- **Проверки:** `bash scripts/opencode-review/request-guard.test.sh` (`mise run gate`) и `bash scripts/opencode-review/finalizer.test.sh` (`mise run finalizer`).
 - **Замена старого workflow:** чтобы обойти бюджет было нельзя, [`.github/opencode.yml.pending`](.github/opencode.yml.pending) оставляет общий агент только для обычных issue. Его нужно установить вместо текущего `opencode.yml`.
 
 ## Автотриаж новых обращений

@@ -74,6 +74,28 @@ jobs:
           MAX_REQUESTS: "3"
         run: bash scripts/opencode-review/request-guard.sh
 
+      - name: Write gate artifact
+        if: always()
+        env:
+          OUTPUT_PATH: .opencode-request/gate.json
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          HEAD_SHA: ${{ steps.guard.outputs.head_sha }}
+          ADMITTED: ${{ steps.guard.outputs.admitted }}
+          REASON: ${{ steps.guard.outputs.reason }}
+          USED: ${{ steps.guard.outputs.used }}
+          LIMIT: "3"
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: bash scripts/opencode-review/write-gate-artifact.sh
+
+      - name: Upload gate artifact
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: opencode-request-gate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .opencode-request/gate.json
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Enforce gate
         if: steps.guard.outputs.admitted != 'true'
         env:
@@ -84,6 +106,7 @@ jobs:
           exit 1
 
   agent:
+    name: Agent request
     needs: gate
     if: needs.gate.outputs.admitted == 'true'
     runs-on: ubuntu-24.04
@@ -97,6 +120,14 @@ jobs:
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
+
+      - name: Preflight agent request
+        id: preflight
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          GATE_ADMITTED: ${{ needs.gate.outputs.admitted }}
+          HEAD_SHA: ${{ needs.gate.outputs.head_sha }}
+        run: bash scripts/opencode-review/preflight.sh
 
       - name: Checkout agent skills
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -196,7 +227,7 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
 
-      - name: Publish gate or agent result
+      - name: Publish gate decision
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -205,21 +236,24 @@ jobs:
           GATE_REASON: ${{ needs.gate.outputs.reason }}
           GATE_USED: ${{ needs.gate.outputs.used }}
           GATE_RESULT: ${{ needs.gate.result }}
-          AGENT_RESULT: ${{ needs.agent.result }}
           HEAD_SHA: ${{ needs.gate.outputs.head_sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
 
-          reason="$GATE_REASON"
+          # Admitted requests are published by the agent itself on success and
+          # by the trusted workflow_run finalizer on timeout, cancellation,
+          # setup/install errors and agent failures. This job owns only the
+          # gate decision, which the finalizer must not duplicate.
           if [ "$GATE_ADMITTED" = "true" ]; then
-            case "$AGENT_RESULT" in
-              success) exit 0 ;;
-              cancelled) reason=cancelled ;;
-              failure) reason=agent_failed ;;
-              *) reason=infra ;;
-            esac
-          elif [ -z "$reason" ]; then
+            printf 'Request admitted; abnormal outcomes belong to the finalizer\n'
+            exit 0
+          fi
+
+          reason="$GATE_REASON"
+          if [ -z "$reason" ]; then
             case "$GATE_RESULT" in
               cancelled) reason=cancelled ;;
               *) reason=infra ;;
@@ -238,6 +272,8 @@ jobs:
           REVIEW_PATH="" \
           USED="$GATE_USED" \
           LIMIT="3" \
+          RUN_ID="$RUN_ID" \
+          RUN_ATTEMPT="$RUN_ATTEMPT" \
           OUTPUT_PATH=.opencode-request/comment.md \
             bash scripts/opencode-review/publish-result.sh
 

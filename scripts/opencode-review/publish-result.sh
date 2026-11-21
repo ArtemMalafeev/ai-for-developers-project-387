@@ -10,11 +10,16 @@ REVIEW_PATH="${REVIEW_PATH:-}"
 BROWSER_RESULT="${BROWSER_RESULT:-}"
 USED="${USED:-}"
 LIMIT="${LIMIT:-3}"
+RUN_ID="${RUN_ID:-}"
+RUN_ATTEMPT="${RUN_ATTEMPT:-1}"
 
 mkdir -p "$(dirname "$OUTPUT_PATH")"
 
 {
   printf '<!-- opencode-review-result -->\n'
+  if [ -n "$RUN_ID" ]; then
+    printf '<!-- opencode-review-request:run=%s attempt=%s -->\n' "$RUN_ID" "$RUN_ATTEMPT"
+  fi
   printf '## Автоматическое ревью OpenCode\n\n'
   printf "Проверенный head: \`%s\`\n\n" "$HEAD_SHA"
   printf "Итог: \`%s\`\n\n" "$REASON"
