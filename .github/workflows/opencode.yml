@@ -51,6 +51,22 @@ jobs:
         uses: anomalyco/opencode/github@17b79f4e0c16dcff200b0417567ed22aeb2d7166 # github-v1.2.28
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          # A GitHub runner cannot answer permission prompts from OpenCode.
+          OPENCODE_CONFIG_CONTENT: |-
+            {
+              "permission": {
+                "external_directory": {
+                  "*": "deny",
+                  "/tmp/*": "allow"
+                },
+                "doom_loop": "deny",
+                "read": {
+                  "*.env": "deny",
+                  "*.env.*": "deny",
+                  "*.env.example": "allow"
+                }
+              }
+            }
         with:
           model: opencode/deepseek-v4.1-flash
           mentions: /opencode,/oc
