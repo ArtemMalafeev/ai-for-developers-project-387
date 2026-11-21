@@ -81,7 +81,7 @@ jobs:
             runs="$(gh run list --repo "$GITHUB_REPOSITORY" --commit "$HEAD_SHA" --limit 20 \
               --json databaseId,name,workflowName,status,conclusion,url,headSha 2>/tmp/opencode-review/runs-error)" || runs_status=$?
             if [ -n "$runs" ]; then
-              printf '%s\n' "$runs"
+              printf '%s\n' "$runs" | jq 'map(select(.workflowName != "OpenCode Review"))'
             else
               printf 'Не удалось получить прогоны (gh exit %s): ' "$runs_status"
               cat /tmp/opencode-review/runs-error
@@ -186,7 +186,7 @@ jobs:
             --file "$CONTEXT_PATH" \
             --title "Авторевью pull request" \
             "$(cat /tmp/opencode-review/prompt.md)" \
-            | jq -r 'select(.type == "text") | .part.text' > "$review"
+            | jq -sr '[.[] | select(.type == "text") | .part.text] | last // empty' > "$review"
           test -s "$review"
           cat "$review"
           echo "path=$review" >> "$GITHUB_OUTPUT"
@@ -227,7 +227,7 @@ jobs:
           {
             printf '<!-- opencode-review -->\n'
             printf '## Автоматическое ревью OpenCode\n\n'
-            printf 'Проверенный head: `%s`\n\n' "$HEAD_SHA"
+            printf 'Проверенный head: %s\n\n' "$HEAD_SHA"
             cat "$REVIEW_PATH"
           } > /tmp/opencode-review/comment.md
           gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file /tmp/opencode-review/comment.md
