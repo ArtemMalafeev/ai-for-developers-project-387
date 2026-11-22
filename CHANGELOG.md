@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.0](https://github.com/ArtemMalafeev/ai-for-developers-project-387/compare/ai-for-developers-project-387-v1.8.0...ai-for-developers-project-387-v1.9.0) (2026-11-22)
+
+
+### Features
+
+* **nodejs-package:** настроить регулярный Lighthouse-аудит ([#50](https://github.com/ArtemMalafeev/ai-for-developers-project-387/issues/50)) ([fd201e6](https://github.com/ArtemMalafeev/ai-for-developers-project-387/commit/fd201e67a64a4d33da404708b129f3edffa4cac6))
+
 ## [1.8.0](https://github.com/ArtemMalafeev/ai-for-developers-project-387/compare/ai-for-developers-project-387-v1.7.0...ai-for-developers-project-387-v1.8.0) (2026-11-21)
 
 
