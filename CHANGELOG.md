@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.8.0](https://github.com/ArtemMalafeev/ai-for-developers-project-387/compare/ai-for-developers-project-387-v1.7.0...ai-for-developers-project-387-v1.8.0) (2026-11-21)
+
+
+### Features
+
+* **nodejs-package:** добавить ручную тёмную тему ([#25](https://github.com/ArtemMalafeev/ai-for-developers-project-387/issues/25)) ([#43](https://github.com/ArtemMalafeev/ai-for-developers-project-387/issues/43)) ([6790e08](https://github.com/ArtemMalafeev/ai-for-developers-project-387/commit/6790e08b64efa6ae7c70ba99c2c52a0a4b4bcba6))
+
+
+### Bug Fixes
+
+* **nodejs-package:** восстановить контекст и учёт запросов ревью ([#39](https://github.com/ArtemMalafeev/ai-for-developers-project-387/issues/39)) ([39f17f6](https://github.com/ArtemMalafeev/ai-for-developers-project-387/commit/39f17f69b45f473a5e3482d91df10ce724984973))
+* **nodejs-package:** исправить пустое авторевью и контекст ([#39](https://github.com/ArtemMalafeev/ai-for-developers-project-387/issues/39)) ([9b28495](https://github.com/ArtemMalafeev/ai-for-developers-project-387/commit/9b284959d9a3147bd8ef76fabbdad1c74551665a))
+* **nodejs-package:** учитывать построчные запуски старого workflow ([#39](https://github.com/ArtemMalafeev/ai-for-developers-project-387/issues/39)) ([a45ca8b](https://github.com/ArtemMalafeev/ai-for-developers-project-387/commit/a45ca8b2c3ce28432e6434285404f8584e7344ae))
+
 ## [1.7.0](https://github.com/ArtemMalafeev/ai-for-developers-project-387/compare/ai-for-developers-project-387-v1.6.0...ai-for-developers-project-387-v1.7.0) (2026-11-21)
 
 
